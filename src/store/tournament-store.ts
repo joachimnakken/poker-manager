@@ -36,6 +36,9 @@ interface TournamentState {
   registerRebuy: (tournamentId: string, playerId: string) => void;
   registerAddon: (tournamentId: string, playerId: string) => void;
 
+  // Duplication
+  duplicateTournament: (sourceId: string) => string | null;
+
   // Seating
   drawSeats: (tournamentId: string) => void;
   clearSeats: (tournamentId: string) => void;
@@ -556,6 +559,45 @@ export const useTournamentStore = create<TournamentState>()(
           };
         });
       },
+      duplicateTournament: (sourceId: string) => {
+        const source = get().tournaments[sourceId];
+        if (!source) return null;
+
+        const id = generateId();
+        const today = new Date().toISOString().split("T")[0];
+        const config: TournamentConfig = {
+          ...source.config,
+          id,
+          name: source.config.name,
+          date: today,
+        };
+
+        const players: Player[] = source.players.map((p) => ({
+          id: generateId(),
+          name: p.name,
+          rebuys: 0,
+          hasAddon: false,
+          isActive: true,
+        }));
+
+        const tournament: Tournament = {
+          config,
+          players,
+          timer: {
+            currentLevelIndex: 0,
+            secondsRemaining: config.blindStructure[0]?.duration ?? 900,
+            isRunning: false,
+          },
+          status: "setup",
+          knockoutOrder: [],
+        };
+
+        set((state) => ({
+          tournaments: { ...state.tournaments, [id]: tournament },
+        }));
+        return id;
+      },
+
       drawSeats: (tournamentId: string) => {
         set((state) => {
           const tournament = state.tournaments[tournamentId];

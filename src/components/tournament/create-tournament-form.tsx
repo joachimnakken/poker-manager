@@ -8,16 +8,22 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTournamentStore } from "@/store/tournament-store";
 
+function getDefaultName() {
+  return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " Poker Night";
+}
+
 export function CreateTournamentForm() {
   const router = useRouter();
   const createTournament = useTournamentStore((s) => s.createTournament);
   const [name, setName] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
+  const placeholder = getDefaultName();
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    const id = createTournament(name.trim(), date);
+    const tournamentName = name.trim() || placeholder;
+    const id = createTournament(tournamentName, date);
     router.push(`/tournament/${id}`);
   }
 
@@ -32,10 +38,9 @@ export function CreateTournamentForm() {
             <Label htmlFor="name">Tournament Name</Label>
             <Input
               id="name"
-              placeholder="Friday Night Poker"
+              placeholder={placeholder}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              required
             />
           </div>
           <div className="space-y-2">

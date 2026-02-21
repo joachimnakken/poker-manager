@@ -1,25 +1,16 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useTournamentStore } from "@/store/tournament-store";
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 
 export function TournamentResults({ tournamentId }: { tournamentId: string }) {
+  const router = useRouter();
   const tournament = useTournamentStore((s) => s.tournaments[tournamentId]);
-  const resetTournament = useTournamentStore((s) => s.resetTournament);
+  const duplicateTournament = useTournamentStore((s) => s.duplicateTournament);
   if (!tournament) return null;
 
   const { players, config } = tournament;
@@ -29,6 +20,14 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
   const totalAddons = players.filter((p) => p.hasAddon).length;
 
   const payoutMap = new Map(payouts.map((p) => [p.position, p]));
+
+  // Count knockouts per player
+  const knockoutCounts = new Map<string, number>();
+  for (const p of players) {
+    if (p.knockedOutBy) {
+      knockoutCounts.set(p.knockedOutBy, (knockoutCounts.get(p.knockedOutBy) ?? 0) + 1);
+    }
+  }
 
   const sorted = [...players].sort(
     (a, b) => (a.finishPosition ?? 999) - (b.finishPosition ?? 999)
@@ -76,6 +75,7 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
             {podiumOrder.map((player, i) => {
               const style = podiumStyles[i];
               const payout = payoutMap.get(player.finishPosition ?? 0);
+              const koCount = knockoutCounts.get(player.id) ?? 0;
               return (
                 <div key={player.id} className="flex flex-col items-center gap-2 flex-1 max-w-[160px]">
                   <div className={`text-lg md:text-xl font-bold ${style.color}`}>
@@ -84,6 +84,11 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
                   {payout && (
                     <div className="text-sm font-medium">
                       {formatCurrency(payout.amount, config.currency)}
+                    </div>
+                  )}
+                  {koCount > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {koCount} KO{koCount !== 1 ? "s" : ""}
                     </div>
                   )}
                   <div
@@ -152,30 +157,17 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
         </CardContent>
       </Card>
 
-      {/* Restart button */}
+      {/* Actions */}
       <div className="pt-2 flex justify-center">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button size="lg" variant="outline">
-              Restart Tournament
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Restart tournament?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will reset the timer, clear all knockouts, rebuys, and addons,
-                and put the tournament back in setup mode. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => resetTournament(tournamentId)}>
-                Restart
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          size="lg"
+          onClick={() => {
+            const newId = duplicateTournament(tournamentId);
+            if (newId) router.push(`/tournament/${newId}`);
+          }}
+        >
+          Play Again
+        </Button>
       </div>
     </div>
   );
