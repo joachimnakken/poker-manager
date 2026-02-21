@@ -29,6 +29,10 @@ export function KnockoutLog({ tournamentId }: { tournamentId: string }) {
           <div className="text-muted-foreground text-xs">
             {player!.finishPosition && `#${player!.finishPosition}`}
             {player!.knockedOutInLevel && ` · Level ${player!.knockedOutInLevel}`}
+            {player!.knockedOutBy && (() => {
+              const eliminator = players.find((p) => p.id === player!.knockedOutBy);
+              return eliminator ? ` · by ${eliminator.name}` : null;
+            })()}
           </div>
         </div>
       ))}

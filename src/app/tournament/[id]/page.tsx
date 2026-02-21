@@ -6,7 +6,6 @@ import { useTournamentStore } from "@/store/tournament-store";
 import { useTimer } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { BlindTimer } from "@/components/tournament/blind-timer";
-import { TournamentControls } from "@/components/tournament/tournament-controls";
 import { StatsBar } from "@/components/tournament/stats-bar";
 import { PlayerTable } from "@/components/tournament/player-table";
 import { TournamentHeader } from "@/components/tournament/tournament-header";
@@ -73,7 +72,6 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
       <TournamentHeader tournamentId={id} />
 
       <BlindTimer tournamentId={id} />
-      <TournamentControls tournamentId={id} />
       <StatsBar tournamentId={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">

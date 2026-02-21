@@ -28,9 +28,10 @@ interface TournamentState {
   tick: (id: string) => void;
   nextLevel: (id: string) => void;
   prevLevel: (id: string) => void;
+  resetLevelTimer: (id: string) => void;
 
   // Player actions
-  knockoutPlayer: (tournamentId: string, playerId: string) => void;
+  knockoutPlayer: (tournamentId: string, playerId: string, knockedOutByPlayerId: string) => void;
   undoKnockout: (tournamentId: string) => void;
   registerRebuy: (tournamentId: string, playerId: string) => void;
   registerAddon: (tournamentId: string, playerId: string) => void;
@@ -226,6 +227,7 @@ export const useTournamentStore = create<TournamentState>()(
             hasAddon: false,
             finishPosition: undefined,
             knockedOutInLevel: undefined,
+            knockedOutBy: undefined,
           }));
           return {
             tournaments: {
@@ -349,7 +351,28 @@ export const useTournamentStore = create<TournamentState>()(
         });
       },
 
-      knockoutPlayer: (tournamentId: string, playerId: string) => {
+      resetLevelTimer: (id: string) => {
+        set((state) => {
+          const tournament = state.tournaments[id];
+          if (!tournament) return state;
+          const currentLevel = tournament.config.blindStructure[tournament.timer.currentLevelIndex];
+          if (!currentLevel) return state;
+          return {
+            tournaments: {
+              ...state.tournaments,
+              [id]: {
+                ...tournament,
+                timer: {
+                  ...tournament.timer,
+                  secondsRemaining: currentLevel.duration,
+                },
+              },
+            },
+          };
+        });
+      },
+
+      knockoutPlayer: (tournamentId: string, playerId: string, knockedOutByPlayerId: string) => {
         set((state) => {
           const tournament = state.tournaments[tournamentId];
           if (!tournament) return state;
@@ -364,6 +387,7 @@ export const useTournamentStore = create<TournamentState>()(
                   isActive: false,
                   finishPosition,
                   knockedOutInLevel: tournament.timer.currentLevelIndex + 1,
+                  knockedOutBy: knockedOutByPlayerId,
                 }
               : p
           );
@@ -415,7 +439,7 @@ export const useTournamentStore = create<TournamentState>()(
           const lastKnockedOutId = tournament.knockoutOrder[tournament.knockoutOrder.length - 1];
           const players = tournament.players.map((p) =>
             p.id === lastKnockedOutId
-              ? { ...p, isActive: true, finishPosition: undefined, knockedOutInLevel: undefined }
+              ? { ...p, isActive: true, finishPosition: undefined, knockedOutInLevel: undefined, knockedOutBy: undefined }
               : p
           );
           const knockoutOrder = tournament.knockoutOrder.slice(0, -1);
@@ -480,6 +504,7 @@ export const useTournamentStore = create<TournamentState>()(
                 rebuys: p.rebuys + 1,
                 finishPosition: undefined,
                 knockedOutInLevel: undefined,
+                knockedOutBy: undefined,
               };
             }
             if (!p.isActive && p.id !== playerId) {

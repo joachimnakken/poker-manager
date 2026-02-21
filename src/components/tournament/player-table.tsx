@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useTournamentStore } from "@/store/tournament-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PlayerAddDialog } from "./player-add-dialog";
 
 export function PlayerTable({ tournamentId }: { tournamentId: string }) {
@@ -13,6 +15,8 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
   const undoKnockout = useTournamentStore((s) => s.undoKnockout);
   const registerRebuy = useTournamentStore((s) => s.registerRebuy);
   const registerAddon = useTournamentStore((s) => s.registerAddon);
+
+  const [koPopoverOpen, setKoPopoverOpen] = useState<string | null>(null);
 
   if (!tournament) return null;
 
@@ -67,7 +71,15 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
                       #{player.finishPosition}
                     </span>
                   )}
-                  <span className="font-medium truncate">{player.name}</span>
+                  <div className="min-w-0">
+                    <span className="font-medium truncate block">{player.name}</span>
+                    {player.knockedOutBy && (() => {
+                      const eliminator = players.find((p) => p.id === player.knockedOutBy);
+                      return eliminator ? (
+                        <span className="text-xs text-muted-foreground">by {eliminator.name}</span>
+                      ) : null;
+                    })()}
+                  </div>
                   <div className="flex gap-1">
                     {player.isActive ? (
                       <Badge variant="default" className="text-xs">IN</Badge>
@@ -98,14 +110,41 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
                   )}
 
                   {!isSetup && !isFinished && player.isActive && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => knockoutPlayer(tournamentId, player.id)}
-                      className="text-xs"
+                    <Popover
+                      open={koPopoverOpen === player.id}
+                      onOpenChange={(open) => setKoPopoverOpen(open ? player.id : null)}
                     >
-                      KO
-                    </Button>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="text-xs"
+                        >
+                          KO
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-48 p-2" align="end">
+                        <p className="text-xs text-muted-foreground mb-2 px-1">Knocked out by:</p>
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                          {players
+                            .filter((p) => p.isActive && p.id !== player.id)
+                            .map((p) => (
+                              <Button
+                                key={p.id}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-xs"
+                                onClick={() => {
+                                  knockoutPlayer(tournamentId, player.id, p.id);
+                                  setKoPopoverOpen(null);
+                                }}
+                              >
+                                {p.name}
+                              </Button>
+                            ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
                   )}
 
                   {!isSetup && !isFinished && canRebuy && (

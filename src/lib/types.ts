@@ -31,6 +31,7 @@ export interface Player {
   isActive: boolean;
   finishPosition?: number;
   knockedOutInLevel?: number;
+  knockedOutBy?: string;
 }
 
 export interface Timer {

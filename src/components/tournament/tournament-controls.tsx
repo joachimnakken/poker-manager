@@ -22,6 +22,7 @@ export function TournamentControls({ tournamentId }: { tournamentId: string }) {
   const nextLevel = useTournamentStore((s) => s.nextLevel);
   const prevLevel = useTournamentStore((s) => s.prevLevel);
   const resetTournament = useTournamentStore((s) => s.resetTournament);
+  const resetLevelTimer = useTournamentStore((s) => s.resetLevelTimer);
 
   if (!tournament) return null;
 
@@ -88,24 +89,27 @@ export function TournamentControls({ tournamentId }: { tournamentId: string }) {
             &laquo; Prev
           </Button>
 
-          {timer.isRunning ? (
-            <Button
-              size="lg"
-              variant="secondary"
-              onClick={() => pauseTournament(tournamentId)}
-              className="px-8 min-w-[120px]"
-            >
-              Pause
-            </Button>
-          ) : (
-            <Button
-              size="lg"
-              onClick={() => resumeTournament(tournamentId)}
-              className="px-8 min-w-[120px]"
-            >
-              Resume
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => resetLevelTimer(tournamentId)}
+            className={timer.isRunning ? "invisible" : ""}
+          >
+            Reset Round
+          </Button>
+
+          <Button
+            size="lg"
+            variant={timer.isRunning ? "secondary" : "default"}
+            onClick={() =>
+              timer.isRunning
+                ? pauseTournament(tournamentId)
+                : resumeTournament(tournamentId)
+            }
+            className="px-8 min-w-[120px]"
+          >
+            {timer.isRunning ? "Pause" : "Resume"}
+          </Button>
 
           <Button
             variant="outline"

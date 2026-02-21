@@ -4,10 +4,22 @@ import { useTournamentStore } from "@/store/tournament-store";
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TournamentControls } from "./tournament-controls";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function TournamentResults({ tournamentId }: { tournamentId: string }) {
   const tournament = useTournamentStore((s) => s.tournaments[tournamentId]);
+  const resetTournament = useTournamentStore((s) => s.resetTournament);
   if (!tournament) return null;
 
   const { players, config } = tournament;
@@ -126,6 +138,10 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
                         {player.knockedOutInLevel
                           ? `Level ${player.knockedOutInLevel}`
                           : ""}
+                        {player.knockedOutBy && (() => {
+                          const eliminator = players.find((p) => p.id === player.knockedOutBy);
+                          return eliminator ? ` · KO'd by ${eliminator.name}` : null;
+                        })()}
                       </span>
                     )}
                   </div>
@@ -137,8 +153,29 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
       </Card>
 
       {/* Restart button */}
-      <div className="pt-2">
-        <TournamentControls tournamentId={tournamentId} />
+      <div className="pt-2 flex justify-center">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button size="lg" variant="outline">
+              Restart Tournament
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Restart tournament?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will reset the timer, clear all knockouts, rebuys, and addons,
+                and put the tournament back in setup mode. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={() => resetTournament(tournamentId)}>
+                Restart
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
