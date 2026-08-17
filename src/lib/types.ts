@@ -45,13 +45,52 @@ export type TournamentStatus = "setup" | "running" | "paused" | "break" | "finis
 export interface SeatAssignment {
   playerId: string;
   seat: number;
+  table: number;
+}
+
+export interface TableInfo {
+  tableNumber: number;
+  captainPlayerId?: string;
+}
+
+export type ProposalStatus = "pending" | "applied" | "declined" | "cancelled";
+
+export interface Proposal {
+  id: string;
+  playerId: string;
+  fromTable: number;
+  fromSeat: number;
+  toTable: number;
+  toSeat: number;
+  proposedAt: string;
+  fromConfirmedAt?: string;
+  toConfirmedAt?: string;
+  status: ProposalStatus;
+  declineReason?: string;
+}
+
+/** The clock anchor as stored on the server. `secondsRemaining` is never persisted. */
+export interface ClockAnchor {
+  currentLevelIndex: number;
+  /** ISO timestamp of when the current level began. Null before the tournament starts. */
+  levelStartedAt: string | null;
+  /** ISO timestamp of when the current pause began, null if running. */
+  pausedAt: string | null;
+  /** Paused milliseconds accumulated on the current level. */
+  pausedMs: number;
 }
 
 export interface Tournament {
   config: TournamentConfig;
   players: Player[];
+  /** Derived from `anchor` on every client — never the source of truth. */
   timer: Timer;
   status: TournamentStatus;
   knockoutOrder: string[]; // player IDs in knockout order
   seatAssignments?: SeatAssignment[];
+  code: string;
+  anchor: ClockAnchor;
+  seatsPerTable: number;
+  tables: TableInfo[];
+  proposals: Proposal[];
 }

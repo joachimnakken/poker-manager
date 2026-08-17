@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PlayerAddDialog } from "./player-add-dialog";
+import type { Player } from "@/lib/types";
 
 export function PlayerTable({ tournamentId }: { tournamentId: string }) {
   const tournament = useTournamentStore((s) => s.tournaments[tournamentId]);
@@ -15,12 +16,14 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
   const undoKnockout = useTournamentStore((s) => s.undoKnockout);
   const registerRebuy = useTournamentStore((s) => s.registerRebuy);
   const registerAddon = useTournamentStore((s) => s.registerAddon);
+  const assignCaptain = useTournamentStore((s) => s.assignCaptain);
 
   const [koPopoverOpen, setKoPopoverOpen] = useState<string | null>(null);
+  const [captainPopoverOpen, setCaptainPopoverOpen] = useState<number | null>(null);
 
   if (!tournament) return null;
 
-  const { players, status, config, timer } = tournament;
+  const { players, status, config, timer, seatAssignments, tables } = tournament;
   const isSetup = status === "setup";
   const isFinished = status === "finished";
 
@@ -33,15 +36,149 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
   }
   const canRebuy = currentPlayLevel <= config.lastRebuyLevel && !isSetup && !isFinished;
 
-  // Sort: active first, then by finish position
-  const sortedPlayers = [...players].sort((a, b) => {
-    if (a.isActive && !b.isActive) return -1;
-    if (!a.isActive && b.isActive) return 1;
-    if (!a.isActive && !b.isActive) {
-      return (a.finishPosition ?? 999) - (b.finishPosition ?? 999);
-    }
-    return 0;
-  });
+  function sortPlayers(list: Player[]): Player[] {
+    return [...list].sort((a, b) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      if (!a.isActive && !b.isActive) {
+        return (a.finishPosition ?? 999) - (b.finishPosition ?? 999);
+      }
+      return 0;
+    });
+  }
+
+  function renderRow(player: Player) {
+    return (
+      <div
+        key={player.id}
+        data-player-row={player.name}
+        className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+          player.isActive ? "bg-muted/30" : "bg-muted/10 opacity-60"
+        }`}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          {player.finishPosition && (
+            <span
+              data-finish-position={player.name}
+              className="text-sm font-mono text-muted-foreground w-6 text-right"
+            >
+              #{player.finishPosition}
+            </span>
+          )}
+          <div className="min-w-0">
+            <span className="font-medium truncate block">{player.name}</span>
+            {player.knockedOutBy && (() => {
+              const eliminator = players.find((p) => p.id === player.knockedOutBy);
+              return eliminator ? (
+                <span className="text-xs text-muted-foreground">by {eliminator.name}</span>
+              ) : null;
+            })()}
+          </div>
+          <div className="flex gap-1">
+            {player.isActive ? (
+              <Badge variant="default" className="text-xs">IN</Badge>
+            ) : (
+              <Badge variant="secondary" className="text-xs">OUT</Badge>
+            )}
+            {player.rebuys > 0 && (
+              <Badge variant="outline" className="text-xs">
+                R:{player.rebuys}
+              </Badge>
+            )}
+            {player.hasAddon && (
+              <Badge variant="outline" className="text-xs">A</Badge>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-1 ml-2">
+          {isSetup && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => removePlayer(tournamentId, player.id)}
+              className="text-destructive hover:text-destructive text-xs"
+            >
+              Remove
+            </Button>
+          )}
+
+          {!isSetup && !isFinished && player.isActive && (
+            <Popover
+              open={koPopoverOpen === player.id}
+              onOpenChange={(open) => setKoPopoverOpen(open ? player.id : null)}
+            >
+              <PopoverTrigger asChild>
+                <Button variant="destructive" size="sm" className="text-xs">
+                  KO
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="end">
+                <p className="text-xs text-muted-foreground mb-2 px-1">Knocked out by:</p>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {players
+                    .filter((p) => p.isActive && p.id !== player.id)
+                    .map((p) => (
+                      <Button
+                        key={p.id}
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-xs"
+                        onClick={() => {
+                          knockoutPlayer(tournamentId, player.id, p.id);
+                          setKoPopoverOpen(null);
+                        }}
+                      >
+                        {p.name}
+                      </Button>
+                    ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+
+          {!isSetup && !isFinished && canRebuy && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => registerRebuy(tournamentId, player.id)}
+              className="text-xs"
+            >
+              Rebuy
+            </Button>
+          )}
+
+          {!isFinished && player.isActive && !player.hasAddon && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => registerAddon(tournamentId, player.id)}
+              className="text-xs"
+            >
+              Addon
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const tableNumbers = [...new Set((seatAssignments ?? []).map((a) => a.table))].sort(
+    (a, b) => a - b,
+  );
+  // The flat list is still right for a single table, and for setup before the draw.
+  const grouped = tableNumbers.length > 1;
+
+  const undoButton = !isSetup && !isFinished && tournament.knockoutOrder.length > 0 && (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => undoKnockout(tournamentId)}
+      className="text-xs text-muted-foreground mt-2"
+    >
+      Undo Last Knockout
+    </Button>
+  );
 
   return (
     <Card>
@@ -50,93 +187,72 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
         {!isFinished && <PlayerAddDialog tournamentId={tournamentId} />}
       </CardHeader>
       <CardContent>
-        {sortedPlayers.length === 0 ? (
+        {players.length === 0 ? (
           <p className="text-muted-foreground text-center py-4">
             No players yet. Add players to get started.
           </p>
-        ) : (
+        ) : !grouped ? (
           <div className="space-y-2">
-            {sortedPlayers.map((player) => (
-              <div
-                key={player.id}
-                className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
-                  player.isActive
-                    ? "bg-muted/30"
-                    : "bg-muted/10 opacity-60"
-                }`}
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  {player.finishPosition && (
-                    <span className="text-sm font-mono text-muted-foreground w-6 text-right">
-                      #{player.finishPosition}
-                    </span>
-                  )}
-                  <div className="min-w-0">
-                    <span className="font-medium truncate block">{player.name}</span>
-                    {player.knockedOutBy && (() => {
-                      const eliminator = players.find((p) => p.id === player.knockedOutBy);
-                      return eliminator ? (
-                        <span className="text-xs text-muted-foreground">by {eliminator.name}</span>
-                      ) : null;
-                    })()}
-                  </div>
-                  <div className="flex gap-1">
-                    {player.isActive ? (
-                      <Badge variant="default" className="text-xs">IN</Badge>
-                    ) : (
-                      <Badge variant="secondary" className="text-xs">OUT</Badge>
-                    )}
-                    {player.rebuys > 0 && (
-                      <Badge variant="outline" className="text-xs">
-                        R:{player.rebuys}
-                      </Badge>
-                    )}
-                    {player.hasAddon && (
-                      <Badge variant="outline" className="text-xs">A</Badge>
-                    )}
-                  </div>
-                </div>
+            {sortPlayers(players).map(renderRow)}
+            {undoButton}
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {tableNumbers.map((tableNumber) => {
+              const seated = (seatAssignments ?? []).filter((a) => a.table === tableNumber);
+              const seatedIds = new Set(seated.map((a) => a.playerId));
+              const tablePlayers = players.filter((p) => seatedIds.has(p.id));
+              const captainId = tables.find((t) => t.tableNumber === tableNumber)?.captainPlayerId;
+              const captain = players.find((p) => p.id === captainId);
+              const activeCount = tablePlayers.filter((p) => p.isActive).length;
 
-                <div className="flex gap-1 ml-2">
-                  {isSetup && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removePlayer(tournamentId, player.id)}
-                      className="text-destructive hover:text-destructive text-xs"
-                    >
-                      Remove
-                    </Button>
-                  )}
-
-                  {!isSetup && !isFinished && player.isActive && (
+              return (
+                <div key={tableNumber} className="space-y-2" data-table={tableNumber}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold">Table {tableNumber}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {activeCount} left
+                    </Badge>
                     <Popover
-                      open={koPopoverOpen === player.id}
-                      onOpenChange={(open) => setKoPopoverOpen(open ? player.id : null)}
+                      open={captainPopoverOpen === tableNumber}
+                      onOpenChange={(open) => setCaptainPopoverOpen(open ? tableNumber : null)}
                     >
                       <PopoverTrigger asChild>
                         <Button
-                          variant="destructive"
+                          variant="ghost"
                           size="sm"
-                          className="text-xs"
+                          className="text-xs text-muted-foreground h-6 px-2"
                         >
-                          KO
+                          {captain ? `Captain: ${captain.name}` : "Captain: host"}
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-48 p-2" align="end">
-                        <p className="text-xs text-muted-foreground mb-2 px-1">Knocked out by:</p>
+                      <PopoverContent className="w-52 p-2" align="start">
+                        <p className="text-xs text-muted-foreground mb-2 px-1">
+                          Assign captain for table {tableNumber}
+                        </p>
                         <div className="space-y-1 max-h-48 overflow-y-auto">
-                          {players
-                            .filter((p) => p.isActive && p.id !== player.id)
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-xs"
+                            onClick={() => {
+                              assignCaptain(tournamentId, tableNumber, null);
+                              setCaptainPopoverOpen(null);
+                            }}
+                          >
+                            Host (unclaimed)
+                          </Button>
+                          {tablePlayers
+                            .filter((p) => p.isActive)
                             .map((p) => (
                               <Button
                                 key={p.id}
-                                variant="ghost"
+                                variant={p.id === captainId ? "secondary" : "ghost"}
                                 size="sm"
                                 className="w-full justify-start text-xs"
                                 onClick={() => {
-                                  knockoutPlayer(tournamentId, player.id, p.id);
-                                  setKoPopoverOpen(null);
+                                  assignCaptain(tournamentId, tableNumber, p.id);
+                                  setCaptainPopoverOpen(null);
                                 }}
                               >
                                 {p.name}
@@ -145,43 +261,12 @@ export function PlayerTable({ tournamentId }: { tournamentId: string }) {
                         </div>
                       </PopoverContent>
                     </Popover>
-                  )}
-
-                  {!isSetup && !isFinished && canRebuy && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => registerRebuy(tournamentId, player.id)}
-                      className="text-xs"
-                    >
-                      Rebuy
-                    </Button>
-                  )}
-
-                  {!isFinished && player.isActive && !player.hasAddon && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => registerAddon(tournamentId, player.id)}
-                      className="text-xs"
-                    >
-                      Addon
-                    </Button>
-                  )}
+                  </div>
+                  <div className="space-y-2">{sortPlayers(tablePlayers).map(renderRow)}</div>
                 </div>
-              </div>
-            ))}
-
-            {!isSetup && !isFinished && tournament.knockoutOrder.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => undoKnockout(tournamentId)}
-                className="text-xs text-muted-foreground mt-2"
-              >
-                Undo Last Knockout
-              </Button>
-            )}
+              );
+            })}
+            {undoButton}
           </div>
         )}
       </CardContent>

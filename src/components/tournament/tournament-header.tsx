@@ -82,13 +82,22 @@ export function TournamentHeader({ tournamentId }: { tournamentId: string }) {
               </button>
             </div>
           )}
-          <p className="text-sm text-muted-foreground">{tournament.config.date}</p>
+          <p className="text-sm text-muted-foreground">
+            {tournament.config.date} &middot;{" "}
+            <span className="font-mono tracking-widest">{tournament.code}</span>
+          </p>
         </div>
         <Badge variant={statusColor[tournament.status]}>
           {tournament.status === "break" ? "Break" : tournament.status}
         </Badge>
       </div>
       <div className="flex gap-2">
+        {/* Opened in a second window on the extended display — hence the new tab. */}
+        <a href={`/display/${tournament.code}`} target="_blank" rel="noreferrer">
+          <Button variant="outline" size="sm">
+            Projector
+          </Button>
+        </a>
         {tournament.status !== "finished" && (
           <Link href={`/tournament/${tournamentId}/settings`}>
             <Button variant="outline" size="sm">

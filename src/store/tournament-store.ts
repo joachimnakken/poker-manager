@@ -1,650 +1,325 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { Tournament, TournamentConfig, Player, TournamentStatus, SeatAssignment } from "@/lib/types";
-import { DEFAULT_BLIND_STRUCTURE, DEFAULT_CONFIG } from "@/lib/constants";
-import { generateId } from "@/lib/tournament-utils";
-import { getPayoutPercentages } from "@/lib/prize-calculator";
+"use client";
 
+import { create } from "zustand";
+import type { Tournament, TournamentConfig } from "@/lib/types";
+import type { CheckinResponse, ListResponse, StateResponse } from "@/lib/api";
+import { levelsOverrun, readClock, serverOffset } from "@/lib/clock";
+import { setIdentity, tokenFor } from "@/lib/identity";
+import type { Action } from "@/lib/actions";
+import type { Move } from "@/lib/balancing";
+import type { ProposalOp } from "@/lib/proposal-ops";
+
+/**
+ * The read API is deliberately unchanged from the localStorage era: components still
+ * call `useTournamentStore(s => s.tournaments[id])` and get a whole `Tournament`.
+ * Only the internals moved — `persist` became server-sync, and actions became async.
+ * The store is keyed by tournament code, which is also `config.id`.
+ */
 interface TournamentState {
   tournaments: Record<string, Tournament>;
+  /** `serverNow - Date.now()` at the last response. Phone clocks drift; this cancels it. */
+  offsetMs: number;
+  loaded: boolean;
+  error: string | null;
 
-  // Tournament CRUD
-  createTournament: (name: string, date: string) => string;
-  deleteTournament: (id: string) => void;
-  updateConfig: (id: string, config: Partial<TournamentConfig>) => void;
+  loadAll: () => Promise<void>;
+  loadOne: (code: string) => Promise<void>;
 
-  // Player management
-  addPlayer: (tournamentId: string, name: string) => void;
-  removePlayer: (tournamentId: string, playerId: string) => void;
+  createTournament: (name: string, date: string) => Promise<string>;
+  deleteTournament: (id: string) => Promise<void>;
+  updateConfig: (
+    id: string,
+    config: Partial<TournamentConfig>,
+    seatsPerTable?: number,
+  ) => Promise<void>;
 
-  // Tournament flow
-  startTournament: (id: string) => void;
-  pauseTournament: (id: string) => void;
-  resumeTournament: (id: string) => void;
-  finishTournament: (id: string) => void;
-  resetTournament: (id: string) => void;
+  addPlayer: (tournamentId: string, name: string) => Promise<void>;
+  removePlayer: (tournamentId: string, playerId: string) => Promise<void>;
 
-  // Timer
+  startTournament: (id: string) => Promise<void>;
+  pauseTournament: (id: string) => Promise<void>;
+  resumeTournament: (id: string) => Promise<void>;
+  finishTournament: (id: string) => Promise<void>;
+  resetTournament: (id: string) => Promise<void>;
+
+  /** Recomputes the countdown from the anchor. Not a decrement — nothing is stored ticking. */
   tick: (id: string) => void;
-  nextLevel: (id: string) => void;
-  prevLevel: (id: string) => void;
-  resetLevelTimer: (id: string) => void;
+  nextLevel: (id: string) => Promise<void>;
+  prevLevel: (id: string) => Promise<void>;
+  resetLevelTimer: (id: string) => Promise<void>;
 
-  // Player actions
-  knockoutPlayer: (tournamentId: string, playerId: string, knockedOutByPlayerId: string) => void;
-  undoKnockout: (tournamentId: string) => void;
-  registerRebuy: (tournamentId: string, playerId: string) => void;
-  registerAddon: (tournamentId: string, playerId: string) => void;
+  knockoutPlayer: (
+    tournamentId: string,
+    playerId: string,
+    knockedOutByPlayerId?: string,
+  ) => Promise<void>;
+  undoKnockout: (tournamentId: string) => Promise<void>;
+  registerRebuy: (tournamentId: string, playerId: string) => Promise<void>;
+  registerAddon: (tournamentId: string, playerId: string) => Promise<void>;
 
-  // Duplication
-  duplicateTournament: (sourceId: string) => string | null;
+  duplicateTournament: (sourceId: string) => Promise<string | null>;
 
-  // Seating
-  drawSeats: (tournamentId: string) => void;
-  clearSeats: (tournamentId: string) => void;
+  drawSeats: (tournamentId: string) => Promise<void>;
+  clearSeats: (tournamentId: string) => Promise<void>;
+
+  claimCaptaincy: (tournamentId: string, tableNumber: number) => Promise<void>;
+  releaseCaptaincy: (tournamentId: string, tableNumber: number) => Promise<void>;
+  assignCaptain: (
+    tournamentId: string,
+    tableNumber: number,
+    playerId: string | null,
+  ) => Promise<void>;
+
+  movePlayer: (
+    tournamentId: string,
+    playerId: string,
+    toTable: number,
+    toSeat: number,
+  ) => Promise<void>;
+  proposeMove: (tournamentId: string, move: Move) => Promise<void>;
+  confirmProposal: (tournamentId: string, id: string) => Promise<void>;
+  declineProposal: (tournamentId: string, id: string, reason: string) => Promise<void>;
+  forceProposal: (tournamentId: string, id: string) => Promise<void>;
+  cancelProposal: (tournamentId: string, id: string) => Promise<void>;
+
+  checkIn: (code: string, name: string) => Promise<CheckinResponse | null>;
 }
 
-export const useTournamentStore = create<TournamentState>()(
-  persist(
-    (set, get) => ({
-      tournaments: {},
+/** Applies the client's clock offset so `timer` reflects the anchor, not local time. */
+function withDerivedTimer(tournament: Tournament, offsetMs: number): Tournament {
+  const reading = readClock(tournament.anchor, tournament.config.blindStructure, offsetMs);
+  if (
+    tournament.timer.secondsRemaining === reading.secondsRemaining &&
+    tournament.timer.isRunning === reading.isRunning &&
+    tournament.timer.currentLevelIndex === tournament.anchor.currentLevelIndex
+  ) {
+    return tournament;
+  }
+  return {
+    ...tournament,
+    timer: {
+      currentLevelIndex: tournament.anchor.currentLevelIndex,
+      secondsRemaining: reading.secondsRemaining,
+      isRunning: reading.isRunning,
+    },
+  };
+}
 
-      createTournament: (name: string, date: string) => {
-        const id = generateId();
-        const config: TournamentConfig = {
-          id,
-          name,
-          date,
-          ...DEFAULT_CONFIG,
-          blindStructure: [...DEFAULT_BLIND_STRUCTURE],
-          payoutPercentages: [],
-          currency: DEFAULT_CONFIG.currency,
-        };
+async function request<T>(url: string, init?: RequestInit & { code?: string }): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("content-type", "application/json");
+  const token = init?.code ? tokenFor(init.code) : undefined;
+  if (token) {
+    headers.set("x-poker-token", token);
+  }
 
-        const tournament: Tournament = {
-          config,
-          players: [],
-          timer: {
-            currentLevelIndex: 0,
-            secondsRemaining: DEFAULT_BLIND_STRUCTURE[0].duration,
-            isRunning: false,
-          },
-          status: "setup",
-          knockoutOrder: [],
-        };
+  const response = await fetch(url, { ...init, headers, cache: "no-store" });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error((body as { error?: string }).error ?? `Request failed (${response.status})`);
+  }
+  return body as T;
+}
 
-        set((state) => ({
-          tournaments: { ...state.tournaments, [id]: tournament },
-        }));
-        return id;
-      },
+export const useTournamentStore = create<TournamentState>()((set, get) => {
+  /** Merges a state response, keeping object identity when nothing actually changed. */
+  function absorb(data: StateResponse | ListResponse): void {
+    const offsetMs = serverOffset(data.serverNow);
+    const incoming = "tournaments" in data ? data.tournaments : [data.tournament];
 
-      deleteTournament: (id: string) => {
-        set((state) => {
-          const { [id]: _, ...rest } = state.tournaments;
-          return { tournaments: rest };
-        });
-      },
+    set((state) => {
+      const tournaments = { ...state.tournaments };
+      for (const tournament of incoming) {
+        const previous = tournaments[tournament.code];
+        const next = withDerivedTimer(tournament, offsetMs);
+        // Polling every 2s would otherwise re-render every subscriber on each pass.
+        tournaments[tournament.code] =
+          previous && JSON.stringify(previous) === JSON.stringify(next) ? previous : next;
+      }
+      return { tournaments, offsetMs, loaded: true, error: null };
+    });
+  }
 
-      updateConfig: (id: string, configUpdate: Partial<TournamentConfig>) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                config: { ...tournament.config, ...configUpdate },
-              },
-            },
-          };
-        });
-      },
-
-      addPlayer: (tournamentId: string, name: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament) return state;
-          const player: Player = {
-            id: generateId(),
-            name,
-            rebuys: 0,
-            hasAddon: false,
-            isActive: true,
-          };
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players: [...tournament.players, player],
-              },
-            },
-          };
-        });
-      },
-
-      removePlayer: (tournamentId: string, playerId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament || tournament.status !== "setup") return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players: tournament.players.filter((p) => p.id !== playerId),
-              },
-            },
-          };
-        });
-      },
-
-      startTournament: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament || tournament.players.length < 2) return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                status: "running",
-                timer: { ...tournament.timer, isRunning: true },
-              },
-            },
-          };
-        });
-      },
-
-      pauseTournament: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                status: "paused",
-                timer: { ...tournament.timer, isRunning: false },
-              },
-            },
-          };
-        });
-      },
-
-      resumeTournament: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          const currentLevel = tournament.config.blindStructure[tournament.timer.currentLevelIndex];
-          const status: TournamentStatus = currentLevel?.isBreak ? "break" : "running";
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                status,
-                timer: { ...tournament.timer, isRunning: true },
-              },
-            },
-          };
-        });
-      },
-
-      finishTournament: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          // Assign first place to remaining active player
-          const players = tournament.players.map((p) => {
-            if (p.isActive && !p.finishPosition) {
-              return { ...p, finishPosition: 1, isActive: false };
-            }
-            return p;
-          });
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                players,
-                status: "finished",
-                timer: { ...tournament.timer, isRunning: false },
-              },
-            },
-          };
-        });
-      },
-
-      resetTournament: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          const players = tournament.players.map((p) => ({
-            ...p,
-            isActive: true,
-            rebuys: 0,
-            hasAddon: false,
-            finishPosition: undefined,
-            knockedOutInLevel: undefined,
-            knockedOutBy: undefined,
-          }));
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                players,
-                status: "setup",
-                timer: {
-                  currentLevelIndex: 0,
-                  secondsRemaining: tournament.config.blindStructure[0]?.duration ?? 900,
-                  isRunning: false,
-                },
-                knockoutOrder: [],
-              },
-            },
-          };
-        });
-      },
-
-      tick: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament || !tournament.timer.isRunning) return state;
-
-          const newSeconds = tournament.timer.secondsRemaining - 1;
-
-          if (newSeconds <= 0) {
-            // Auto-advance to next level
-            const nextIndex = tournament.timer.currentLevelIndex + 1;
-            const blinds = tournament.config.blindStructure;
-            if (nextIndex >= blinds.length) {
-              return {
-                tournaments: {
-                  ...state.tournaments,
-                  [id]: {
-                    ...tournament,
-                    timer: { ...tournament.timer, secondsRemaining: 0, isRunning: false },
-                  },
-                },
-              };
-            }
-            const nextLevel = blinds[nextIndex];
-            const newStatus: TournamentStatus = nextLevel.isBreak ? "break" : "running";
-            return {
-              tournaments: {
-                ...state.tournaments,
-                [id]: {
-                  ...tournament,
-                  status: newStatus,
-                  timer: {
-                    currentLevelIndex: nextIndex,
-                    secondsRemaining: nextLevel.duration,
-                    isRunning: true,
-                  },
-                },
-              },
-            };
-          }
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                timer: { ...tournament.timer, secondsRemaining: newSeconds },
-              },
-            },
-          };
-        });
-      },
-
-      nextLevel: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          const nextIndex = tournament.timer.currentLevelIndex + 1;
-          const blinds = tournament.config.blindStructure;
-          if (nextIndex >= blinds.length) return state;
-          const nextLevel = blinds[nextIndex];
-          const newStatus: TournamentStatus = nextLevel.isBreak ? "break" : (tournament.timer.isRunning ? "running" : "paused");
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                status: newStatus,
-                timer: {
-                  ...tournament.timer,
-                  currentLevelIndex: nextIndex,
-                  secondsRemaining: nextLevel.duration,
-                },
-              },
-            },
-          };
-        });
-      },
-
-      prevLevel: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          const prevIndex = tournament.timer.currentLevelIndex - 1;
-          if (prevIndex < 0) return state;
-          const prevLevelData = tournament.config.blindStructure[prevIndex];
-          const newStatus: TournamentStatus = prevLevelData.isBreak ? "break" : (tournament.timer.isRunning ? "running" : "paused");
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                status: newStatus,
-                timer: {
-                  ...tournament.timer,
-                  currentLevelIndex: prevIndex,
-                  secondsRemaining: prevLevelData.duration,
-                },
-              },
-            },
-          };
-        });
-      },
-
-      resetLevelTimer: (id: string) => {
-        set((state) => {
-          const tournament = state.tournaments[id];
-          if (!tournament) return state;
-          const currentLevel = tournament.config.blindStructure[tournament.timer.currentLevelIndex];
-          if (!currentLevel) return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [id]: {
-                ...tournament,
-                timer: {
-                  ...tournament.timer,
-                  secondsRemaining: currentLevel.duration,
-                },
-              },
-            },
-          };
-        });
-      },
-
-      knockoutPlayer: (tournamentId: string, playerId: string, knockedOutByPlayerId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament) return state;
-
-          const activeCount = tournament.players.filter((p) => p.isActive).length;
-          const finishPosition = activeCount;
-
-          const players = tournament.players.map((p) =>
-            p.id === playerId
-              ? {
-                  ...p,
-                  isActive: false,
-                  finishPosition,
-                  knockedOutInLevel: tournament.timer.currentLevelIndex + 1,
-                  knockedOutBy: knockedOutByPlayerId,
-                }
-              : p
-          );
-
-          const knockoutOrder = [...tournament.knockoutOrder, playerId];
-          const newActiveCount = players.filter((p) => p.isActive).length;
-
-          // Auto-finish if only 1 player left
-          if (newActiveCount === 1) {
-            const finalPlayers = players.map((p) => {
-              if (p.isActive) {
-                return { ...p, finishPosition: 1, isActive: false };
-              }
-              return p;
-            });
-            return {
-              tournaments: {
-                ...state.tournaments,
-                [tournamentId]: {
-                  ...tournament,
-                  players: finalPlayers,
-                  knockoutOrder,
-                  status: "finished",
-                  timer: { ...tournament.timer, isRunning: false },
-                },
-              },
-            };
-          }
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players,
-                knockoutOrder,
-              },
-            },
-          };
-        });
-      },
-
-      undoKnockout: (tournamentId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament || tournament.knockoutOrder.length === 0) return state;
-          if (tournament.status === "finished") return state;
-
-          const lastKnockedOutId = tournament.knockoutOrder[tournament.knockoutOrder.length - 1];
-          const players = tournament.players.map((p) =>
-            p.id === lastKnockedOutId
-              ? { ...p, isActive: true, finishPosition: undefined, knockedOutInLevel: undefined, knockedOutBy: undefined }
-              : p
-          );
-          const knockoutOrder = tournament.knockoutOrder.slice(0, -1);
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players,
-                knockoutOrder,
-              },
-            },
-          };
-        });
-      },
-
-      registerRebuy: (tournamentId: string, playerId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament) return state;
-
-          const currentLevel = tournament.config.blindStructure[tournament.timer.currentLevelIndex];
-          const currentLevelNum = currentLevel?.isBreak
-            ? tournament.timer.currentLevelIndex // breaks count as same level
-            : tournament.timer.currentLevelIndex + 1;
-
-          // Find actual play level (not counting breaks)
-          let playLevel = 0;
-          for (let i = 0; i <= tournament.timer.currentLevelIndex; i++) {
-            if (!tournament.config.blindStructure[i].isBreak) {
-              playLevel = tournament.config.blindStructure[i].level;
-            }
-          }
-
-          if (playLevel > tournament.config.lastRebuyLevel) return state;
-
-          const player = tournament.players.find((p) => p.id === playerId);
-          if (!player) return state;
-
-          // Active player rebuy: just increment count
-          if (player.isActive) {
-            const players = tournament.players.map((p) =>
-              p.id === playerId ? { ...p, rebuys: p.rebuys + 1 } : p
-            );
-            return {
-              tournaments: {
-                ...state.tournaments,
-                [tournamentId]: { ...tournament, players },
-              },
-            };
-          }
-
-          // Knocked-out player rebuy: reactivate
-          const knockoutOrder = tournament.knockoutOrder.filter((id) => id !== playerId);
-
-          const players = tournament.players.map((p) => {
-            if (p.id === playerId) {
-              return {
-                ...p,
-                isActive: true,
-                rebuys: p.rebuys + 1,
-                finishPosition: undefined,
-                knockedOutInLevel: undefined,
-                knockedOutBy: undefined,
-              };
-            }
-            if (!p.isActive && p.id !== playerId) {
-              const posInKnockoutOrder = knockoutOrder.indexOf(p.id);
-              if (posInKnockoutOrder !== -1) {
-                const totalPlayers = tournament.players.length;
-                return {
-                  ...p,
-                  finishPosition: totalPlayers - posInKnockoutOrder,
-                };
-              }
-            }
-            return p;
-          });
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players,
-                knockoutOrder,
-              },
-            },
-          };
-        });
-      },
-
-      registerAddon: (tournamentId: string, playerId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament) return state;
-
-          const player = tournament.players.find((p) => p.id === playerId);
-          if (!player || player.hasAddon) return state;
-
-          const players = tournament.players.map((p) =>
-            p.id === playerId ? { ...p, hasAddon: true } : p
-          );
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                players,
-              },
-            },
-          };
-        });
-      },
-      duplicateTournament: (sourceId: string) => {
-        const source = get().tournaments[sourceId];
-        if (!source) return null;
-
-        const id = generateId();
-        const today = new Date().toISOString().split("T")[0];
-        const config: TournamentConfig = {
-          ...source.config,
-          id,
-          name: source.config.name,
-          date: today,
-        };
-
-        const players: Player[] = source.players.map((p) => ({
-          id: generateId(),
-          name: p.name,
-          rebuys: 0,
-          hasAddon: false,
-          isActive: true,
-        }));
-
-        const tournament: Tournament = {
-          config,
-          players,
-          timer: {
-            currentLevelIndex: 0,
-            secondsRemaining: config.blindStructure[0]?.duration ?? 900,
-            isRunning: false,
-          },
-          status: "setup",
-          knockoutOrder: [],
-        };
-
-        set((state) => ({
-          tournaments: { ...state.tournaments, [id]: tournament },
-        }));
-        return id;
-      },
-
-      drawSeats: (tournamentId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament || tournament.players.length === 0) return state;
-
-          // Fisher-Yates shuffle
-          const playerIds = tournament.players.map((p) => p.id);
-          for (let i = playerIds.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [playerIds[i], playerIds[j]] = [playerIds[j], playerIds[i]];
-          }
-
-          const seatAssignments: SeatAssignment[] = playerIds.map((playerId, i) => ({
-            playerId,
-            seat: i + 1,
-          }));
-
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                seatAssignments,
-              },
-            },
-          };
-        });
-      },
-
-      clearSeats: (tournamentId: string) => {
-        set((state) => {
-          const tournament = state.tournaments[tournamentId];
-          if (!tournament) return state;
-          return {
-            tournaments: {
-              ...state.tournaments,
-              [tournamentId]: {
-                ...tournament,
-                seatAssignments: undefined,
-              },
-            },
-          };
-        });
-      },
-    }),
-    {
-      name: "poker-tournament-storage",
+  async function act(code: string, action: Action): Promise<void> {
+    try {
+      absorb(
+        await request<StateResponse>(`/api/t/${code}/action`, {
+          method: "POST",
+          body: JSON.stringify(action),
+          code,
+        }),
+      );
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Something went wrong" });
     }
-  )
-);
+  }
+
+  async function propose(code: string, operation: ProposalOp): Promise<void> {
+    try {
+      absorb(
+        await request<StateResponse>(`/api/t/${code}/proposal`, {
+          method: "POST",
+          body: JSON.stringify(operation),
+          code,
+        }),
+      );
+    } catch (error) {
+      set({ error: error instanceof Error ? error.message : "Something went wrong" });
+    }
+  }
+
+  // One in-flight advance per tournament: the DB guard makes a duplicate a no-op, but
+  // there is no reason to send it.
+  const advancing = new Set<string>();
+
+  return {
+    tournaments: {},
+    offsetMs: 0,
+    loaded: false,
+    error: null,
+
+    loadAll: async () => {
+      try {
+        absorb(await request<ListResponse>("/api/tournaments"));
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : "Could not load tournaments" });
+      }
+    },
+
+    loadOne: async (code) => {
+      try {
+        absorb(await request<StateResponse>(`/api/t/${code}/state`));
+      } catch (error) {
+        set((state) => ({
+          loaded: true,
+          error: error instanceof Error ? error.message : "Could not load tournament",
+          tournaments: state.tournaments,
+        }));
+      }
+    },
+
+    createTournament: async (name, date) => {
+      const created = await request<{ code: string; ownerToken: string }>("/api/tournaments", {
+        method: "POST",
+        body: JSON.stringify({ name, date }),
+      });
+      setIdentity(created.code, { ownerToken: created.ownerToken });
+      await get().loadOne(created.code);
+      return created.code;
+    },
+
+    deleteTournament: async (id) => {
+      try {
+        await request(`/api/t/${id}`, { method: "DELETE", code: id });
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : "Could not delete" });
+        return;
+      }
+      set((state) => {
+        const { [id]: _removed, ...rest } = state.tournaments;
+        return { tournaments: rest };
+      });
+    },
+
+    updateConfig: (id, config, seatsPerTable) =>
+      act(id, { type: "update-config", config, seatsPerTable }),
+
+    addPlayer: (tournamentId, name) => act(tournamentId, { type: "add-player", name }),
+    removePlayer: (tournamentId, playerId) =>
+      act(tournamentId, { type: "remove-player", playerId }),
+
+    startTournament: (id) => act(id, { type: "start" }),
+    pauseTournament: (id) => act(id, { type: "pause" }),
+    resumeTournament: (id) => act(id, { type: "resume" }),
+    finishTournament: (id) => act(id, { type: "finish" }),
+    resetTournament: (id) => act(id, { type: "reset" }),
+
+    tick: (id) => {
+      const { tournaments, offsetMs } = get();
+      const tournament = tournaments[id];
+      if (!tournament) {
+        return;
+      }
+
+      const overrun = levelsOverrun(tournament.anchor, tournament.config.blindStructure, offsetMs);
+      if (overrun > 0 && !advancing.has(id)) {
+        advancing.add(id);
+        act(id, { type: "advance-level", fromIndex: tournament.anchor.currentLevelIndex }).finally(
+          () => advancing.delete(id),
+        );
+      }
+
+      const next = withDerivedTimer(tournament, offsetMs);
+      if (next !== tournament) {
+        set((state) => ({ tournaments: { ...state.tournaments, [id]: next } }));
+      }
+    },
+
+    nextLevel: (id) => act(id, { type: "next-level" }),
+    prevLevel: (id) => act(id, { type: "prev-level" }),
+    resetLevelTimer: (id) => act(id, { type: "reset-level" }),
+
+    knockoutPlayer: (tournamentId, playerId, knockedOutByPlayerId) =>
+      act(tournamentId, { type: "knockout", playerId, byPlayerId: knockedOutByPlayerId }),
+    undoKnockout: (tournamentId) => act(tournamentId, { type: "undo-knockout" }),
+    registerRebuy: (tournamentId, playerId) => act(tournamentId, { type: "rebuy", playerId }),
+    registerAddon: (tournamentId, playerId) => act(tournamentId, { type: "addon", playerId }),
+
+    duplicateTournament: async (sourceId) => {
+      const source = get().tournaments[sourceId];
+      if (!source) {
+        return null;
+      }
+      const today = new Date().toISOString().split("T")[0];
+      const code = await get().createTournament(source.config.name, today);
+      await get().updateConfig(code, source.config, source.seatsPerTable);
+      for (const player of source.players) {
+        await get().addPlayer(code, player.name);
+      }
+      return code;
+    },
+
+    drawSeats: (tournamentId) => act(tournamentId, { type: "draw-seats" }),
+    clearSeats: (tournamentId) => act(tournamentId, { type: "clear-seats" }),
+
+    claimCaptaincy: (tournamentId, tableNumber) =>
+      act(tournamentId, { type: "claim-captaincy", tableNumber }),
+    releaseCaptaincy: (tournamentId, tableNumber) =>
+      act(tournamentId, { type: "release-captaincy", tableNumber }),
+    assignCaptain: (tournamentId, tableNumber, playerId) =>
+      act(tournamentId, { type: "assign-captain", tableNumber, playerId }),
+
+    movePlayer: (tournamentId, playerId, toTable, toSeat) =>
+      act(tournamentId, { type: "move-player", playerId, toTable, toSeat }),
+
+    proposeMove: (tournamentId, move) =>
+      propose(tournamentId, {
+        op: "create",
+        playerId: move.playerId,
+        fromTable: move.fromTable,
+        fromSeat: move.fromSeat,
+        toTable: move.toTable,
+        toSeat: move.toSeat,
+      }),
+    confirmProposal: (tournamentId, id) => propose(tournamentId, { op: "confirm", id }),
+    declineProposal: (tournamentId, id, reason) =>
+      propose(tournamentId, { op: "decline", id, reason }),
+    forceProposal: (tournamentId, id) => propose(tournamentId, { op: "force", id }),
+    cancelProposal: (tournamentId, id) => propose(tournamentId, { op: "cancel", id }),
+
+    checkIn: async (code, name) => {
+      try {
+        const result = await request<CheckinResponse & StateResponse>(`/api/t/${code}/checkin`, {
+          method: "POST",
+          body: JSON.stringify({ name }),
+        });
+        setIdentity(code, { playerToken: result.playerToken, playerId: result.playerId });
+        absorb(result);
+        return result;
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : "Could not check in" });
+        return null;
+      }
+    },
+  };
+});

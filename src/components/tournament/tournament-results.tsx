@@ -6,6 +6,7 @@ import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import type { Player, TournamentConfig } from "@/lib/types";
 
 export function TournamentResults({ tournamentId }: { tournamentId: string }) {
   const router = useRouter();
@@ -13,7 +14,33 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
   const duplicateTournament = useTournamentStore((s) => s.duplicateTournament);
   if (!tournament) return null;
 
-  const { players, config } = tournament;
+  return (
+    <ResultsView
+      players={tournament.players}
+      config={tournament.config}
+      onPlayAgain={async () => {
+        const code = await duplicateTournament(tournamentId);
+        if (code) {
+          router.push(`/tournament/${code}`);
+        }
+      }}
+    />
+  );
+}
+
+/**
+ * The presentation on its own, so legacy localStorage games — which have no server
+ * record and so no store entry — can render the same standings read-only.
+ */
+export function ResultsView({
+  players,
+  config,
+  onPlayAgain,
+}: {
+  players: Player[];
+  config: TournamentConfig;
+  onPlayAgain?: () => void;
+}) {
   const payouts = calculatePayouts(players, config);
   const totalPot = calculateTotalPot(players, config);
   const totalRebuys = players.reduce((sum, p) => sum + p.rebuys, 0);
@@ -157,18 +184,13 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
         </CardContent>
       </Card>
 
-      {/* Actions */}
-      <div className="pt-2 flex justify-center">
-        <Button
-          size="lg"
-          onClick={() => {
-            const newId = duplicateTournament(tournamentId);
-            if (newId) router.push(`/tournament/${newId}`);
-          }}
-        >
-          Play Again
-        </Button>
-      </div>
+      {onPlayAgain && (
+        <div className="pt-2 flex justify-center">
+          <Button size="lg" onClick={onPlayAgain}>
+            Play Again
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

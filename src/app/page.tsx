@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CreateTournamentForm } from "@/components/tournament/create-tournament-form";
 import { useTournamentStore } from "@/store/tournament-store";
+import { useTournamentListSync } from "@/store/use-sync";
+import { LegacyLocalGames } from "@/components/tournament/legacy-local-games";
 
 export default function HomePage() {
+  useTournamentListSync();
   const tournaments = useTournamentStore((s) => s.tournaments);
   const deleteTournament = useTournamentStore((s) => s.deleteTournament);
   const tournamentList = Object.values(tournaments).sort(
@@ -45,7 +48,8 @@ export default function HomePage() {
                   >
                     <div className="font-medium truncate">{t.config.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {t.config.date} &middot; {t.players.length} players
+                      {t.config.date} &middot; {t.players.length} players &middot;{" "}
+                      <span className="font-mono">{t.code}</span>
                     </div>
                   </Link>
                   <div className="flex items-center gap-2 ml-4">
@@ -74,6 +78,8 @@ export default function HomePage() {
             </CardContent>
           </Card>
         )}
+
+        <LegacyLocalGames />
       </div>
     </div>
   );

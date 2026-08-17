@@ -4,21 +4,32 @@ import { useEffect, useRef } from "react";
 import { useTournamentStore } from "./tournament-store";
 import { playWarningSound, playLevelChangeSound } from "@/lib/sounds";
 
-export function useTimer(tournamentId: string) {
+/**
+ * Drives the countdown. Nothing is stored ticking — this interval only asks the store to
+ * recompute `secondsRemaining` from the clock anchor, so a device that sleeps or loses
+ * signal comes back with the right time rather than a stale counter.
+ */
+export function useClockTick(tournamentId: string) {
   const tick = useTournamentStore((s) => s.tick);
-  const tournament = useTournamentStore((s) => s.tournaments[tournamentId]);
-  const prevLevelRef = useRef<number | null>(null);
-  const warnedRef = useRef(false);
+  const isRunning = useTournamentStore((s) => s.tournaments[tournamentId]?.timer.isRunning);
 
   useEffect(() => {
-    if (!tournament?.timer.isRunning) return;
+    if (!isRunning) return;
 
     const interval = setInterval(() => {
       tick(tournamentId);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [tournament?.timer.isRunning, tournamentId, tick]);
+  }, [isRunning, tournamentId, tick]);
+}
+
+export function useTimer(tournamentId: string) {
+  const tournament = useTournamentStore((s) => s.tournaments[tournamentId]);
+  const prevLevelRef = useRef<number | null>(null);
+  const warnedRef = useRef(false);
+
+  useClockTick(tournamentId);
 
   // Sound effects
   useEffect(() => {

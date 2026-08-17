@@ -17,7 +17,11 @@ export function StatsBar({ tournamentId }: { tournamentId: string }) {
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
-      <StatItem label="Players" value={`${activeCount}/${totalPlayers}`} />
+      <StatItem
+        label="Players"
+        value={`${activeCount}/${totalPlayers}`}
+        testId="players-left"
+      />
       <StatItem label="Avg Stack" value={formatChips(avgStack)} />
       <StatItem
         label="Prize Pool"
@@ -31,11 +35,21 @@ export function StatsBar({ tournamentId }: { tournamentId: string }) {
   );
 }
 
-function StatItem({ label, value }: { label: string; value: string }) {
+function StatItem({
+  label,
+  value,
+  testId,
+}: {
+  label: string;
+  value: string;
+  testId?: string;
+}) {
   return (
     <div className="rounded-lg bg-muted/50 p-3">
       <div className="text-xs text-muted-foreground uppercase tracking-wider">{label}</div>
-      <div className="text-lg font-bold mt-1">{value}</div>
+      <div className="text-lg font-bold mt-1" data-testid={testId}>
+        {value}
+      </div>
     </div>
   );
 }

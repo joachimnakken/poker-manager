@@ -1,0 +1,87 @@
+-- Poker tournament manager — multi-table schema.
+-- Idempotent: safe to run repeatedly. See .plans/2026-08-17-multi-table-mobile.md.
+
+create table if not exists tournaments (
+  id                  uuid primary key default gen_random_uuid(),
+  code                text not null unique,
+  name                text not null,
+  date                date not null,
+  status              text not null default 'setup'
+                        check (status in ('setup','running','paused','break','finished')),
+  config              jsonb not null,
+  seats_per_table     int  not null default 9 check (seats_per_table between 2 and 10),
+
+  -- Clock anchor. secondsRemaining is never stored; clients derive it from these.
+  current_level_index int  not null default 0,
+  level_started_at    timestamptz,
+  paused_at           timestamptz,
+  paused_ms           bigint not null default 0,
+
+  owner_token         uuid not null default gen_random_uuid(),
+  created_at          timestamptz not null default now()
+);
+
+create table if not exists players (
+  id                    uuid primary key default gen_random_uuid(),
+  tournament_id         uuid not null references tournaments(id) on delete cascade,
+  name                  text not null,
+  rebuys                int  not null default 0,
+  has_addon             boolean not null default false,
+  is_active             boolean not null default true,
+  finish_position       int,
+  knocked_out_in_level  int,
+  knocked_out_by        uuid references players(id) on delete set null,
+  player_token          uuid not null default gen_random_uuid(),
+  checked_in_at         timestamptz not null default now(),
+  unique (tournament_id, name)
+);
+
+create table if not exists tables (
+  tournament_id     uuid not null references tournaments(id) on delete cascade,
+  table_number      int  not null,
+  captain_player_id uuid references players(id) on delete set null,
+  captain_claimed_at timestamptz,
+  primary key (tournament_id, table_number)
+);
+
+create table if not exists seats (
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  player_id     uuid not null references players(id) on delete cascade,
+  table_number  int  not null,
+  seat_number   int  not null,
+  primary key (tournament_id, player_id),
+  unique (tournament_id, table_number, seat_number)
+);
+
+-- Append-only and ordered. Finish position depends on how many were active at the
+-- moment of the knockout, so writes here run in a SERIALIZABLE transaction.
+create table if not exists knockouts (
+  id            bigserial primary key,
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  player_id     uuid not null references players(id) on delete cascade,
+  by_player_id  uuid references players(id) on delete set null,
+  level         int  not null,
+  created_at    timestamptz not null default now()
+);
+
+create table if not exists proposals (
+  id                uuid primary key default gen_random_uuid(),
+  tournament_id     uuid not null references tournaments(id) on delete cascade,
+  player_id         uuid not null references players(id) on delete cascade,
+  from_table        int not null,
+  from_seat         int not null,
+  to_table          int not null,
+  to_seat           int not null,
+  proposed_at       timestamptz not null default now(),
+  from_confirmed_at timestamptz,
+  to_confirmed_at   timestamptz,
+  status            text not null default 'pending'
+                      check (status in ('pending','applied','declined','cancelled')),
+  decline_reason    text
+);
+
+create index if not exists players_tournament_idx   on players(tournament_id);
+create index if not exists seats_tournament_idx     on seats(tournament_id);
+create index if not exists knockouts_tournament_idx on knockouts(tournament_id, id);
+create index if not exists proposals_pending_idx    on proposals(tournament_id)
+  where status = 'pending';

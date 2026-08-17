@@ -3,6 +3,7 @@
 import { use, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useTournamentStore } from "@/store/tournament-store";
+import { useTournamentSync } from "@/store/use-sync";
 import { useTimer } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { BlindTimer } from "@/components/tournament/blind-timer";
@@ -13,6 +14,7 @@ import { BlindStructureTable } from "@/components/tournament/blind-structure-tab
 import { PrizePoolDisplay } from "@/components/tournament/prize-pool-display";
 import { KnockoutLog } from "@/components/tournament/knockout-log";
 import { SeatDraw } from "@/components/tournament/seat-draw";
+import { TableBalance } from "@/components/tournament/table-balance";
 import { TournamentResults } from "@/components/tournament/tournament-results";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +23,9 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const router = useRouter();
   const tournament = useTournamentStore((s) => s.tournaments[id]);
+  const loaded = useTournamentStore((s) => s.loaded);
 
+  useTournamentSync(id);
   useTimer(id);
   useWakeLock(tournament?.timer.isRunning ?? false);
 
@@ -49,7 +53,9 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-muted-foreground">Tournament not found</p>
+          <p className="text-muted-foreground">
+            {loaded ? "Tournament not found" : "Loading…"}
+          </p>
           <button onClick={() => router.push("/")} className="text-primary underline">
             Go Home
           </button>
@@ -73,6 +79,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
 
       <BlindTimer tournamentId={id} />
       <StatsBar tournamentId={id} />
+      <TableBalance tournamentId={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <PlayerTable tournamentId={id} />

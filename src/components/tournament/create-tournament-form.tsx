@@ -20,11 +20,20 @@ export function CreateTournamentForm() {
 
   const placeholder = getDefaultName();
 
-  function handleSubmit(e: React.FormEvent) {
+  const [creating, setCreating] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const tournamentName = name.trim() || placeholder;
-    const id = createTournament(tournamentName, date);
-    router.push(`/tournament/${id}`);
+    if (creating) {
+      return;
+    }
+    setCreating(true);
+    try {
+      const code = await createTournament(name.trim() || placeholder, date);
+      router.push(`/tournament/${code}`);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -52,8 +61,8 @@ export function CreateTournamentForm() {
               onChange={(e) => setDate(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full">
-            Create Tournament
+          <Button type="submit" className="w-full" disabled={creating}>
+            {creating ? "Creating…" : "Create Tournament"}
           </Button>
         </form>
       </CardContent>

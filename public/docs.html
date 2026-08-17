@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poker Tournament Manager — Guide</title>
+<style>
+  :root {
+    --bg-deep: #020203;
+    --bg-base: #050506;
+    --bg-elevated: #0a0a0c;
+    --surface: rgba(255,255,255,0.05);
+    --surface-hover: rgba(255,255,255,0.08);
+    --fg: #EDEDEF;
+    --fg-muted: #8A8F98;
+    --fg-subtle: rgba(255,255,255,0.60);
+    --accent: #5E6AD2;
+    --accent-bright: #6872D9;
+    --accent-glow: rgba(94,106,210,0.3);
+    --border: rgba(255,255,255,0.06);
+    --border-hover: rgba(255,255,255,0.10);
+    --border-accent: rgba(94,106,210,0.30);
+
+    --amber: #fbbf24;
+    --red: #f87171;
+    --gold: #facc15;
+
+    --font: "Inter", "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: "Geist Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --shadow-card: 0 0 0 1px rgba(255,255,255,0.06), 0 2px 20px rgba(0,0,0,0.4), 0 0 40px rgba(0,0,0,0.2);
+    --shadow-card-hover: 0 0 0 1px rgba(255,255,255,0.1), 0 8px 40px rgba(0,0,0,0.5), 0 0 80px rgba(94,106,210,0.1);
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; scroll-padding-top: 88px; }
+
+  body {
+    margin: 0;
+    font-family: var(--font);
+    background: var(--bg-base);
+    color: var(--fg);
+    font-size: 15px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* ── Layer 1: base radial gradient ─────────────────────── */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at top, #0a0a0f 0%, #050506 50%, #020203 100%);
+    z-index: -3;
+  }
+
+  /* ── Layer 4: grid overlay + noise ─────────────────────── */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 64px 64px;
+    z-index: -2;
+    pointer-events: none;
+  }
+
+  /* ── Layer 3: animated ambient blobs ───────────────────── */
+  .blobs { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; }
+  .blob { position: absolute; border-radius: 50%; will-change: transform; }
+  .blob-1 {
+    top: -420px; left: 50%; margin-left: -450px;
+    width: 900px; height: 1400px;
+    background: rgba(94,106,210,0.25);
+    filter: blur(150px);
+    animation: float 9s ease-in-out infinite;
+  }
+  .blob-2 {
+    top: 18%; left: -240px;
+    width: 600px; height: 800px;
+    background: radial-gradient(circle, rgba(147,51,234,0.15), rgba(219,39,119,0.10));
+    filter: blur(120px);
+    animation: float 11s ease-in-out infinite reverse;
+  }
+  .blob-3 {
+    top: 55%; right: -200px;
+    width: 500px; height: 700px;
+    background: radial-gradient(circle, rgba(79,70,229,0.12), rgba(59,130,246,0.10));
+    filter: blur(100px);
+    animation: float 10s ease-in-out infinite;
+  }
+  .blob-4 {
+    bottom: -200px; left: 30%;
+    width: 700px; height: 500px;
+    background: rgba(94,106,210,0.10);
+    filter: blur(140px);
+    animation: pulse 8s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-20px) rotate(1deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50%      { opacity: 1; }
+  }
+
+  /* ── Noise ─────────────────────────────────────────────── */
+  .noise {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    opacity: 0.015;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ── Shell ─────────────────────────────────────────────── */
+  .shell {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 24px 128px;
+    display: grid;
+    grid-template-columns: 216px minmax(0, 1fr);
+    gap: 56px;
+    align-items: start;
+  }
+
+  /* ── Hero ──────────────────────────────────────────────── */
+  header.hero {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 96px 24px 64px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 20px;
+  }
+  h1 {
+    font-size: clamp(2.5rem, 7vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    margin: 0 0 20px;
+    background: linear-gradient(to bottom, #fff 0%, rgba(255,255,255,0.95) 55%, rgba(255,255,255,0.62) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lede {
+    font-size: clamp(1rem, 2.2vw, 1.2rem);
+    color: var(--fg-muted);
+    max-width: 60ch;
+    margin: 0 0 28px;
+    line-height: 1.65;
+  }
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+    color: var(--fg-subtle);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 13px;
+  }
+  .pill.accent {
+    color: var(--accent-bright);
+    border-color: var(--border-accent);
+    background: rgba(94,106,210,0.08);
+  }
+
+  /* ── TOC rail ──────────────────────────────────────────── */
+  nav.toc {
+    position: sticky;
+    top: 40px;
+    font-size: 13.5px;
+  }
+  .toc-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin: 0 0 14px;
+    padding-left: 13px;
+  }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; }
+  nav.toc a {
+    display: block;
+    padding: 5px 13px;
+    color: var(--fg-muted);
+    text-decoration: none;
+    border-left: 1px solid var(--border);
+    transition: color 200ms var(--ease), border-color 200ms var(--ease);
+  }
+  nav.toc a:hover { color: var(--fg); border-left-color: var(--border-hover); }
+  nav.toc a.active {
+    color: var(--accent-bright);
+    border-left-color: var(--accent);
+  }
+
+  /* ── Sections ──────────────────────────────────────────── */
+  main { min-width: 0; }
+  section {
+    padding-top: 8px;
+    margin-bottom: 72px;
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 600ms var(--ease), transform 600ms var(--ease);
+  }
+  section.in { opacity: 1; transform: none; }
+
+  .sec-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: var(--accent);
+    display: block;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: clamp(1.6rem, 3.4vw, 2.1rem);
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin: 0 0 8px;
+    color: var(--fg);
+  }
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 28px 0 8px;
+    color: var(--fg);
+  }
+  p { margin: 0 0 14px; color: var(--fg-muted); }
+  p.intro { color: var(--fg-subtle); font-size: 1.02rem; margin-bottom: 22px; }
+  strong { color: var(--fg); font-weight: 600; }
+  a { color: var(--accent-bright); }
+
+  /* ── Cards ─────────────────────────────────────────────── */
+  .card {
+    position: relative;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px 26px;
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+    transition: box-shadow 300ms var(--ease), border-color 300ms var(--ease);
+  }
+  .card:hover { box-shadow: var(--shadow-card-hover); border-color: var(--border-hover); }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 300ms var(--ease);
+    background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 50%), rgba(94,106,210,0.15), transparent 70%);
+    pointer-events: none;
+  }
+  .card:hover::before { opacity: 1; }
+  .card > :first-child { margin-top: 0; }
+  .card > :last-child { margin-bottom: 0; }
+
+  .card-title {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    margin: 0 0 14px;
+  }
+
+  /* ── Feature list ──────────────────────────────────────── */
+  ul.feat { list-style: none; margin: 0; padding: 0; }
+  ul.feat li {
+    position: relative;
+    padding-left: 22px;
+    margin-bottom: 12px;
+    color: var(--fg-muted);
+  }
+  ul.feat li:last-child { margin-bottom: 0; }
+  ul.feat li::before {
+    content: "";
+    position: absolute;
+    left: 2px;
+    top: 10px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  /* ── Step list ─────────────────────────────────────────── */
+  ol.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+  ol.steps li {
+    counter-increment: s;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 16px;
+    color: var(--fg-muted);
+  }
+  ol.steps li:last-child { margin-bottom: 0; }
+  ol.steps li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0; top: 1px;
+    width: 25px; height: 25px;
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent-bright);
+    background: rgba(94,106,210,0.10);
+    border: 1px solid var(--border-accent);
+    border-radius: 8px;
+  }
+
+  /* ── Key / button chips ────────────────────────────────── */
+  .key, .btn {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    padding: 1px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    color: var(--fg);
+    background: rgba(255,255,255,0.07);
+    border: 1px solid var(--border-hover);
+    box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.06);
+  }
+  .btn {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 9px;
+  }
+  .btn.danger { color: var(--red); border-color: rgba(248,113,113,0.28); background: rgba(248,113,113,0.09); }
+  .btn.primary { color: #fff; background: var(--accent); border-color: transparent; box-shadow: 0 0 0 1px rgba(94,106,210,0.5), 0 2px 8px rgba(94,106,210,0.3), inset 0 1px 0 0 rgba(255,255,255,0.2); }
+
+  /* ── Tables ────────────────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+    box-shadow: var(--shadow-card);
+    -webkit-overflow-scrolling: touch;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 380px; }
+  thead th {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+    font-weight: 500;
+    text-align: left;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: 9px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.035);
+    color: var(--fg-muted);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background-color 200ms var(--ease); }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.lvl { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+  tr.brk td { color: var(--accent-bright); background: rgba(94,106,210,0.06); font-style: italic; }
+  tr.brk:hover td { background: rgba(94,106,210,0.09); }
+
+  /* ── Callout ───────────────────────────────────────────── */
+  .callout {
+    border-left: 2px solid var(--accent);
+    background: rgba(94,106,210,0.055);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 18px;
+    margin: 18px 0;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout.warn { border-left-color: var(--amber); background: rgba(251,191,36,0.05); }
+
+  /* ── Timer swatches ────────────────────────────────────── */
+  .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 18px 0; }
+  .swatch {
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.02);
+  }
+  .swatch .t {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+  }
+  .swatch .c { font-size: 12px; color: var(--fg-muted); margin-top: 3px; }
+  .swatch.ok  { }
+  .swatch.ok .t { color: var(--fg); }
+  .swatch.warn { border-color: rgba(251,191,36,0.4); background: rgba(120,53,15,0.14); }
+  .swatch.warn .t { color: var(--amber); }
+  .swatch.crit { border-color: rgba(248,113,113,0.4); background: rgba(127,29,29,0.14); }
+  .swatch.crit .t { color: var(--red); }
+  .swatch.brk { border-color: var(--border-accent); background: rgba(94,106,210,0.06); }
+  .swatch.brk .t { color: var(--accent-bright); font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+  /* ── Lifecycle strip ───────────────────────────────────── */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 0; }
+  .flow .node {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border-hover);
+    background: rgba(255,255,255,0.04);
+    color: var(--fg);
+  }
+  .flow .node.start { border-color: var(--border-accent); color: var(--accent-bright); background: rgba(94,106,210,0.08); }
+  .flow .node.end { border-color: rgba(250,204,21,0.3); color: var(--gold); background: rgba(250,204,21,0.06); }
+  .flow .arw { color: var(--fg-muted); font-size: 13px; }
+
+  /* ── Definition rows ───────────────────────────────────── */
+  dl.defs { margin: 0; }
+  dl.defs div {
+    display: grid;
+    grid-template-columns: 168px minmax(0, 1fr);
+    gap: 16px;
+    padding: 11px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.035);
+  }
+  dl.defs div:last-child { border-bottom: none; }
+  dl.defs dt { color: var(--fg); font-weight: 500; font-size: 13.5px; }
+  dl.defs dd { margin: 0; color: var(--fg-muted); font-size: 13.5px; }
+
+  /* ── Footer ────────────────────────────────────────────── */
+  footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 32px 24px 72px;
+    border-top: 1px solid var(--border);
+    color: var(--fg-muted);
+    font-size: 12.5px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+  }
+  footer code { font-family: var(--mono); color: var(--fg-subtle); }
+
+  /* ── Responsive ────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; gap: 0; padding-bottom: 80px; }
+    header.hero { padding: 56px 20px 32px; }
+    .shell { padding-left: 20px; padding-right: 20px; }
+    nav.toc {
+      position: static;
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .toc-label { padding-left: 0; }
+    nav.toc ol {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    nav.toc a {
+      border-left: none;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 12px;
+      font-size: 12.5px;
+    }
+    nav.toc a.active { border-color: var(--accent); }
+    section { margin-bottom: 56px; }
+    .card { padding: 20px; }
+    dl.defs div { grid-template-columns: 1fr; gap: 2px; }
+    footer { padding: 28px 20px 56px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .blob { animation: none !important; }
+    section { opacity: 1 !important; transform: none !important; transition: none; }
+    * { transition-duration: 1ms !important; }
+  }
+
+  :focus-visible {
+    outline: 2px solid rgba(94,106,210,0.6);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="blobs" aria-hidden="true">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+  <div class="blob blob-4"></div>
+</div>
+<div class="noise" aria-hidden="true"></div>
+
+<header class="hero">
+  <p class="eyebrow">Guide</p>
+  <h1>Poker Tournament<br>Manager</h1>
+  <p class="lede">
+    A tournament clock and bookkeeper for home games. It runs the blind levels, tracks who's out
+    and who knocked them out, and works out the payouts — so the person hosting can actually play.
+  </p>
+  <div class="hero-meta">
+    <span class="pill accent">18 levels &middot; 7 hours by default</span>
+    <span class="pill">Runs in the browser</span>
+    <span class="pill">No account, no setup</span>
+  </div>
+</header>
+
+<div class="shell">
+
+  <nav class="toc" aria-label="Contents">
+    <p class="toc-label">Contents</p>
+    <ol>
+      <li><a href="#what">What it is</a></li>
+      <li><a href="#start">Starting a tournament</a></li>
+      <li><a href="#players">Adding players</a></li>
+      <li><a href="#clock">The clock</a></li>
+      <li><a href="#knockouts">Knocking players out</a></li>
+      <li><a href="#rebuys">Rebuys and addons</a></li>
+      <li><a href="#tabs">The four tabs</a></li>
+      <li><a href="#stats">The stats bar</a></li>
+      <li><a href="#settings">Settings</a></li>
+      <li><a href="#results">When it's over</a></li>
+      <li><a href="#reference">Reference</a></li>
+      <li><a href="#gotchas">Good to know</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- 1 ─────────────────────────────────────────────── -->
+    <section id="what">
+      <span class="sec-num">01</span>
+      <h2>What it is</h2>
+      <p class="intro">
+        Everything a home game needs a tournament director for, on one screen. Put a laptop or tablet
+        at the end of the table, start the clock, and tap <span class="btn danger">KO</span> as players bust.
+      </p>
+      <div class="card">
+        <p class="card-title">A tournament moves through five states</p>
+        <div class="flow">
+          <span class="node start">setup</span>
+          <span class="arw">&rarr;</span>
+          <span class="node">running</span>
+          <span class="arw">&#8646;</span>
+          <span class="node">paused</span>
+          <span class="arw">&#8646;</span>
+          <span class="node">break</span>
+          <span class="arw">&rarr;</span>
+          <span class="node end">finished</span>
+        </div>
+        <p style="margin-top:16px;margin-bottom:0;font-size:13.5px;">
+          The state drives what you can do. Players can only be removed in <strong>setup</strong>.
+          Knockouts and rebuys only work once play has begun. <strong>Finished</strong> swaps the whole
+          view for the results screen.
+        </p>
+      </div>
+    </section>
+
+    <!-- 2 ─────────────────────────────────────────────── -->
+    <section id="start">
+      <span class="sec-num">02</span>
+      <h2>Starting a tournament</h2>
+      <ol class="steps">
+        <li>On the home page, give the tournament a <strong>name</strong>. Leave it blank and it takes today's date — <em>"Aug 17 Poker Night"</em>.</li>
+        <li>Pick a <strong>date</strong>. Defaults to today.</li>
+        <li>Hit <span class="btn primary">Create Tournament</span> and you land straight on the tournament screen.</li>
+      </ol>
+      <p style="margin-top:20px;">
+        Come back to the home page later and every tournament you've run is listed newest-first, with its
+        player count and a status badge. <span class="btn danger">Delete</span> removes one for good.
+      </p>
+      <div class="callout">
+        <p>Got the name wrong? Click the <strong>pencil</strong> next to the title on the tournament page and type over it. <span class="key">Enter</span> saves, <span class="key">Esc</span> cancels.</p>
+      </div>
+    </section>
+
+    <!-- 3 ─────────────────────────────────────────────── -->
+    <section id="players">
+      <span class="sec-num">03</span>
+      <h2>Adding players</h2>
+      <p class="intro">
+        <span class="btn">+ Add Player</span> opens a box that wants one thing: a name. Add everyone, then start.
+      </p>
+      <ul class="feat">
+        <li>Players can only be <strong>removed while the tournament is still in setup</strong>. Once the clock starts, the way out is a knockout.</li>
+        <li>The <span class="btn primary">Start Tournament</span> button stays disabled until <strong>at least two players</strong> are in.</li>
+        <li>You can keep adding players after the tournament has started — useful for latecomers.</li>
+      </ul>
+    </section>
+
+    <!-- 4 ─────────────────────────────────────────────── -->
+    <section id="clock">
+      <span class="sec-num">04</span>
+      <h2>The clock</h2>
+      <p class="intro">
+        The big panel at the top. It shows the level you're on, the blinds, the countdown, and what's coming next.
+      </p>
+
+      <h3>Reading it</h3>
+      <p>
+        Above the countdown: the current <strong>level number and blinds</strong> — or just <strong>BREAK</strong> if
+        you're on one. Below it, a <strong>Next:</strong> line previews the level after this one so you can warn the table.
+      </p>
+
+      <h3>It changes colour as time runs out</h3>
+      <div class="swatches">
+        <div class="swatch ok"><div class="t">14:22</div><div class="c">Plenty of time</div></div>
+        <div class="swatch warn"><div class="t">00:58</div><div class="c">Amber under 1 minute</div></div>
+        <div class="swatch crit"><div class="t">00:24</div><div class="c">Red under 30 seconds</div></div>
+        <div class="swatch brk"><div class="t">Break</div><div class="c">Its own tint</div></div>
+      </div>
+      <p style="font-size:13.5px;">The colour warnings are suppressed while paused, so a paused clock never looks urgent.</p>
+
+      <h3>Controls</h3>
+      <dl class="defs">
+        <div>
+          <dt>Prev &middot; Play/Pause &middot; Next</dt>
+          <dd>The three round buttons under the clock. Prev and Next jump a level and reset that level's clock to its full duration.</dd>
+        </div>
+        <div>
+          <dt><span class="key">Space</span></dt>
+          <dd>Pauses and resumes without reaching for the mouse. Ignored while you're typing in a field.</dd>
+        </div>
+        <div>
+          <dt>Reset round</dt>
+          <dd>The small circular arrow beside the countdown. It only appears <strong>while paused</strong>, and puts the current level's full time back on the clock.</dd>
+        </div>
+        <div>
+          <dt>Restart tournament</dt>
+          <dd>The circular arrow in the <strong>top-right corner</strong> of the panel. Wipes the timer, knockouts, rebuys and addons and drops back to setup. It asks for confirmation first.</dd>
+        </div>
+      </dl>
+
+      <h3>It runs itself</h3>
+      <ul class="feat">
+        <li>At zero the clock <strong>advances to the next level on its own</strong> and keeps running — including into and out of breaks. It only stops at the end of the structure.</li>
+        <li><strong>One beep at 60 seconds left</strong>, and a rising three-tone chime on every level change.</li>
+        <li>The <strong>browser tab title mirrors the clock</strong> — <span class="key">200/400 12:34 - Poker</span> — so a tab in the background still tells you where you are.</li>
+        <li>The <strong>screen stays awake</strong> while the timer runs, and re-arms if you switch away and come back. No more tapping a sleeping tablet mid-hand.</li>
+      </ul>
+    </section>
+
+    <!-- 5 ─────────────────────────────────────────────── -->
+    <section id="knockouts">
+      <span class="sec-num">05</span>
+      <h2>Knocking players out</h2>
+      <p class="intro">
+        <span class="btn danger">KO</span> next to a player opens a short list of everyone still in — pick whoever
+        took their chips. Two taps, and the bookkeeping is done.
+      </p>
+      <ul class="feat">
+        <li>The eliminated player drops down the list, greyed out and tagged <strong>OUT</strong>, with their finishing position and <em>"by &lt;name&gt;"</em> underneath.</li>
+        <li><strong>Finish position counts down.</strong> Bust the 7th of 7 players and they get #7; the next one out gets #6.</li>
+        <li><span class="btn">Undo Last Knockout</span> reverses the most recent one if you tapped the wrong name.</li>
+        <li>When <strong>one player is left the tournament finishes by itself</strong> and that player takes 1st. You never have to declare a winner.</li>
+      </ul>
+      <p style="margin-top:18px;">
+        Recording who did the knocking isn't just bookkeeping — knockout counts show up on the podium at the end,
+        which settles the bounty argument before it starts.
+      </p>
+    </section>
+
+    <!-- 6 ─────────────────────────────────────────────── -->
+    <section id="rebuys">
+      <span class="sec-num">06</span>
+      <h2>Rebuys and addons</h2>
+
+      <h3>Rebuy</h3>
+      <ul class="feat">
+        <li>Available only up to the <strong>last rebuy level</strong> — level 4 out of the box. After that the button disappears for everyone.</li>
+        <li><strong>Breaks don't count toward the cutoff.</strong> The break sitting after level 4 still shows the button; it goes away when play resumes at level 6.</li>
+        <li>Rebuying a player who is <strong>already out brings them back into the tournament</strong> and renumbers everyone else's finishing position. It's the only action that can un-eliminate someone.</li>
+      </ul>
+
+      <h3>Addon</h3>
+      <ul class="feat">
+        <li><strong>Once per player</strong>, and the button vanishes after they've taken it.</li>
+        <li>No level window — it's offered any time before the tournament finishes, <strong>including during setup</strong>.</li>
+        <li>Only offered to players who are still in.</li>
+      </ul>
+
+      <div class="callout">
+        <p>Both feed the prize pool the moment you tap them. The stats bar and the Payouts tab recalculate immediately, so the pot on screen is always the pot on the table.</p>
+      </div>
+      <p style="font-size:13.5px;">
+        Players carry small badges in the list: <span class="btn">IN</span> or <span class="btn">OUT</span>,
+        <span class="btn">R:2</span> for two rebuys, <span class="btn">A</span> for an addon.
+      </p>
+    </section>
+
+    <!-- 7 ─────────────────────────────────────────────── -->
+    <section id="tabs">
+      <span class="sec-num">07</span>
+      <h2>The four tabs</h2>
+      <p class="intro">Beside the player list, four tabs hold everything else worth looking at.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th style="width:130px">Tab</th><th>What it shows</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="lvl">Blinds</td>
+              <td>The full structure top to bottom. The current level is highlighted and levels already played are dimmed, so a glance tells you how far in you are.</td>
+            </tr>
+            <tr>
+              <td class="lvl">Payouts</td>
+              <td>Buy-ins, rebuys and addons itemised, the total pot, then each paid position with its percentage. Once a position is decided the winner's name appears beside it.</td>
+            </tr>
+            <tr>
+              <td class="lvl">Knockouts</td>
+              <td>Every elimination, newest first, with finishing position, the level it happened on, and who did it.</td>
+            </tr>
+            <tr>
+              <td class="lvl">Seating</td>
+              <td><span class="btn">Draw Seats</span> assigns everyone a random seat number. <span class="btn">Redraw</span> reshuffles, <span class="btn">Clear</span> removes them.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 8 ─────────────────────────────────────────────── -->
+    <section id="stats">
+      <span class="sec-num">08</span>
+      <h2>The stats bar</h2>
+      <p class="intro">Four numbers sitting between the clock and the tables, updating as you go.</p>
+      <dl class="defs">
+        <div><dt>Players</dt><dd>Still in, out of the total who bought in — <span class="key">5/9</span>.</dd></div>
+        <div><dt>Avg Stack</dt><dd>Every chip in play divided by the players left, so it climbs as people bust. Buy-ins, rebuys and addons all count.</dd></div>
+        <div><dt>Prize Pool</dt><dd>The live total, in your chosen currency.</dd></div>
+        <div><dt>Rebuys / Addons</dt><dd>How many of each have been taken across the table.</dd></div>
+      </dl>
+    </section>
+
+    <!-- 9 ─────────────────────────────────────────────── -->
+    <section id="settings">
+      <span class="sec-num">09</span>
+      <h2>Settings</h2>
+      <p class="intro">
+        <span class="btn">Settings</span> in the header, available any time before the tournament finishes.
+        Changes apply immediately — there's no save button.
+      </p>
+
+      <h3>General</h3>
+      <p>Tournament name, and the currency label used everywhere money is shown (<span class="key">kr</span> by default).</p>
+
+      <h3>Buy-in &amp; chips</h3>
+      <p>Buy-in, starting chips, last rebuy level, rebuy amount and chips, addon amount and chips. The money fields drive the prize pool; the chip fields drive the average stack.</p>
+
+      <h3>Blind structure</h3>
+      <ul class="feat">
+        <li>Edit <strong>small blind, big blind, ante and minutes</strong> on any row, in place.</li>
+        <li><span class="btn">+ Level</span> appends a level with the last one's blinds doubled.</li>
+        <li><span class="btn">+ Break</span> appends a 10-minute break.</li>
+        <li><span class="btn danger">X</span> deletes a row.</li>
+        <li><span class="btn">Reset to Defaults</span> restores the shipped 18-level structure.</li>
+      </ul>
+      <div class="callout warn">
+        <p>Structure edits apply to <strong>this tournament only</strong>. Build one you like, then use <span class="btn primary">Play Again</span> at the end to carry it into the next game.</p>
+      </div>
+    </section>
+
+    <!-- 10 ────────────────────────────────────────────── -->
+    <section id="results">
+      <span class="sec-num">10</span>
+      <h2>When it's over</h2>
+      <p class="intro">
+        The moment the last knockout lands, the tournament view is replaced by the results screen.
+      </p>
+      <ul class="feat">
+        <li><strong>Prize pool summary</strong> — the total, with a line counting the players, rebuys and addons that built it.</li>
+        <li><strong>Podium</strong> — 2nd, 1st and 3rd on stepped blocks, each with their payout and how many knockouts they took.</li>
+        <li><strong>Final standings</strong> — everyone in order. Paid places show their money; everyone else shows the level they went out on and who did it.</li>
+      </ul>
+      <div class="callout">
+        <p><span class="btn primary">Play Again</span> clones the tournament: same settings, same blind structure, same player names, today's date, all stats cleared. You land straight in the new one, ready to deal.</p>
+      </div>
+    </section>
+
+    <!-- 11 ────────────────────────────────────────────── -->
+    <section id="reference">
+      <span class="sec-num">11</span>
+      <h2>Reference</h2>
+
+      <h3>Default blind structure</h3>
+      <p style="font-size:13.5px;">Eighteen levels and two breaks — about seven hours of play if it goes the distance.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:78px">Level</th>
+              <th class="num">Small</th>
+              <th class="num">Big</th>
+              <th class="num">Ante</th>
+              <th class="num">Min</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="lvl">1</td><td class="num">25</td><td class="num">50</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">2</td><td class="num">50</td><td class="num">100</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">3</td><td class="num">75</td><td class="num">150</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">4</td><td class="num">100</td><td class="num">200</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr class="brk"><td colspan="4">Break &mdash; colour up the 25s, addons available</td><td class="num">10</td></tr>
+            <tr><td class="lvl">6</td><td class="num">200</td><td class="num">400</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">7</td><td class="num">300</td><td class="num">600</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">8</td><td class="num">400</td><td class="num">800</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr><td class="lvl">9</td><td class="num">500</td><td class="num">1,000</td><td class="num">&mdash;</td><td class="num">30</td></tr>
+            <tr class="brk"><td colspan="4">Break &mdash; colour up the 100s</td><td class="num">10</td></tr>
+            <tr><td class="lvl">11</td><td class="num">1,000</td><td class="num">2,000</td><td class="num">500</td><td class="num">20</td></tr>
+            <tr><td class="lvl">12</td><td class="num">1,500</td><td class="num">3,000</td><td class="num">500</td><td class="num">20</td></tr>
+            <tr><td class="lvl">13</td><td class="num">2,000</td><td class="num">4,000</td><td class="num">1,000</td><td class="num">20</td></tr>
+            <tr><td class="lvl">14</td><td class="num">3,000</td><td class="num">6,000</td><td class="num">1,000</td><td class="num">20</td></tr>
+            <tr><td class="lvl">15</td><td class="num">4,000</td><td class="num">8,000</td><td class="num">1,000</td><td class="num">20</td></tr>
+            <tr><td class="lvl">16</td><td class="num">5,000</td><td class="num">10,000</td><td class="num">2,000</td><td class="num">20</td></tr>
+            <tr><td class="lvl">17</td><td class="num">8,000</td><td class="num">16,000</td><td class="num">2,000</td><td class="num">20</td></tr>
+            <tr><td class="lvl">18</td><td class="num">10,000</td><td class="num">20,000</td><td class="num">5,000</td><td class="num">20</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Default money</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Setting</th><th class="num">Value</th></tr></thead>
+          <tbody>
+            <tr><td>Buy-in</td><td class="num">200 kr &middot; 10,000 chips</td></tr>
+            <tr><td>Rebuy</td><td class="num">200 kr &middot; 10,000 chips</td></tr>
+            <tr><td>Addon</td><td class="num">200 kr &middot; 10,000 chips</td></tr>
+            <tr><td>Last rebuy level</td><td class="num">4</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Payout tiers</h3>
+      <p style="font-size:13.5px;">Chosen automatically from the number of players. The pot splits by percentage, rounded to the nearest unit.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:120px">Players</th><th>Split</th></tr></thead>
+          <tbody>
+            <tr><td class="lvl">2</td><td>100</td></tr>
+            <tr><td class="lvl">3&ndash;4</td><td>65 / 35</td></tr>
+            <tr><td class="lvl">5&ndash;6</td><td>60 / 30 / 10</td></tr>
+            <tr><td class="lvl">7&ndash;10</td><td>50 / 30 / 20</td></tr>
+            <tr><td class="lvl">11+</td><td>45 / 27 / 18 / 10</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The chip set the structure assumes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th style="width:96px">Chip</th><th>Colour</th><th class="num">Per stack</th><th class="num">Value</th></tr></thead>
+          <tbody>
+            <tr><td class="lvl">25</td><td>Yellow</td><td class="num">12</td><td class="num">300</td></tr>
+            <tr><td class="lvl">100</td><td>Blue</td><td class="num">12</td><td class="num">1,200</td></tr>
+            <tr><td class="lvl">500</td><td>Green</td><td class="num">7</td><td class="num">3,500</td></tr>
+            <tr><td class="lvl">1000</td><td>Red</td><td class="num">5</td><td class="num">5,000</td></tr>
+            <tr><td class="lvl">5000</td><td>Black</td><td class="num">&mdash;</td><td class="num">addons only</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout">
+        <p>That's <strong>10,000 in chips</strong> per stack. It also explains where the breaks sit: the one after level 4 is there to <strong>colour up the 25s</strong>, and the one after level 9 to colour up the <strong>100s</strong> — which is why the smallest blind steps up right after each of them.</p>
+      </div>
+    </section>
+
+    <!-- 12 ────────────────────────────────────────────── -->
+    <section id="gotchas">
+      <span class="sec-num">12</span>
+      <h2>Good to know</h2>
+      <div class="card">
+        <p class="card-title">Three things worth knowing before the first game</p>
+        <dl class="defs">
+          <div>
+            <dt>It lives in this browser</dt>
+            <dd>Tournaments are saved locally, so they survive a refresh, a closed lid or a crash. But they don't sync anywhere — another device won't see them, and clearing site data deletes them. Run the game from one machine.</dd>
+          </div>
+          <div>
+            <dt>Rebuying a bust player renumbers everyone</dt>
+            <dd>It's the correct behaviour, but it's startling if you meant to hit Addon. The finishing order of everyone already out shifts to make room for the player coming back in.</dd>
+          </div>
+          <div>
+            <dt>Sound needs one click first</dt>
+            <dd>Browsers block audio until you've interacted with the page. Starting the tournament counts, so in practice the beeps just work — but if you loaded the page and never clicked, the first one is silent.</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <span>Poker Tournament Manager &mdash; feature guide</span>
+  <span><code>public/docs.html</code></span>
+</footer>
+
+<script>
+(function () {
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var sections = Array.prototype.slice.call(document.querySelectorAll("main section"));
+  var links = Array.prototype.slice.call(document.querySelectorAll("nav.toc a"));
+
+  if (reduce) {
+    sections.forEach(function (s) { s.classList.add("in"); });
+  }
+
+  // One pass drives both the reveal and the TOC highlight. Deliberately geometry-based
+  // rather than an IntersectionObserver: smooth scrolling from a TOC click flies past
+  // whole sections between observer samples, and anything missed stays invisible for good.
+  function update() {
+    var vh = window.innerHeight;
+    var mark = vh * 0.25;
+    var current = sections[0];
+    for (var i = 0; i < sections.length; i++) {
+      var r = sections[i].getBoundingClientRect();
+      if (r.top < vh - 40) { sections[i].classList.add("in"); }
+      if (r.top <= mark) { current = sections[i]; }
+    }
+    if (current) {
+      links.forEach(function (a) {
+        a.classList.toggle("active", a.getAttribute("href") === "#" + current.id);
+      });
+    }
+  }
+
+  var queued = false;
+  function onScroll() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () { queued = false; update(); });
+  }
+
+  update();
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll);
+  window.addEventListener("load", update);
+
+  // Mouse-tracking spotlight on cards
+  if (!reduce) {
+    document.querySelectorAll(".card").forEach(function (card) {
+      card.addEventListener("pointermove", function (e) {
+        var r = card.getBoundingClientRect();
+        card.style.setProperty("--mx", (e.clientX - r.left) + "px");
+        card.style.setProperty("--my", (e.clientY - r.top) + "px");
+      });
+    });
+  }
+})();
+</script>
+
+</body>
+</html>

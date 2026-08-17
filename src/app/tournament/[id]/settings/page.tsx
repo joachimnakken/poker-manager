@@ -1,70 +1,103 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTournamentStore } from "@/store/tournament-store";
+import { useTournamentSync } from "@/store/use-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { BlindLevel } from "@/lib/types";
+import { BlindLevel, TournamentConfig } from "@/lib/types";
 import { DEFAULT_BLIND_STRUCTURE } from "@/lib/constants";
 
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  useTournamentSync(id);
+
   const tournament = useTournamentStore((s) => s.tournaments[id]);
+  const loaded = useTournamentStore((s) => s.loaded);
   const updateConfig = useTournamentStore((s) => s.updateConfig);
 
-  if (!tournament) {
+  // Every field used to write straight through, which was free against localStorage.
+  // Against the server it would be a request per keystroke, and the 2s poll would
+  // overwrite the field mid-word — so edits are held locally and committed on blur.
+  const [draft, setDraft] = useState<TournamentConfig | null>(null);
+  const [seats, setSeats] = useState(9);
+  const dirty = useRef(false);
+
+  useEffect(() => {
+    if (tournament && !dirty.current) {
+      setDraft(tournament.config);
+      setSeats(tournament.seatsPerTable);
+    }
+  }, [tournament]);
+
+  if (!tournament || !draft) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Tournament not found</p>
+        <p className="text-muted-foreground">{loaded ? "Tournament not found" : "Loading…"}</p>
       </div>
     );
   }
 
-  const { config } = tournament;
-
-  function updateField(field: string, value: number | string) {
-    updateConfig(id, { [field]: value });
+  function edit(patch: Partial<TournamentConfig>) {
+    dirty.current = true;
+    setDraft((current) => (current ? { ...current, ...patch } : current));
   }
 
-  function updateBlindLevel(index: number, field: keyof BlindLevel, value: number | boolean) {
-    const newStructure = [...config.blindStructure];
-    newStructure[index] = { ...newStructure[index], [field]: value };
-    updateConfig(id, { blindStructure: newStructure });
+  function commit(patch?: Partial<TournamentConfig>, seatsPerTable?: number) {
+    dirty.current = false;
+    const next = { ...draft!, ...patch };
+    setDraft(next);
+    void updateConfig(id, next, seatsPerTable ?? seats);
+  }
+
+  function editBlindLevel(index: number, field: keyof BlindLevel, value: number | boolean) {
+    const blindStructure = [...draft!.blindStructure];
+    blindStructure[index] = { ...blindStructure[index], [field]: value };
+    edit({ blindStructure });
   }
 
   function addLevel() {
-    const last = config.blindStructure[config.blindStructure.length - 1];
-    const newLevel: BlindLevel = {
-      level: (last?.level ?? 0) + 1,
-      smallBlind: last ? last.smallBlind * 2 : 100,
-      bigBlind: last ? last.bigBlind * 2 : 200,
-      ante: last ? Math.round(last.ante * 1.5) : 0,
-      duration: 900,
-    };
-    updateConfig(id, { blindStructure: [...config.blindStructure, newLevel] });
+    const last = draft!.blindStructure[draft!.blindStructure.length - 1];
+    commit({
+      blindStructure: [
+        ...draft!.blindStructure,
+        {
+          level: (last?.level ?? 0) + 1,
+          smallBlind: last ? last.smallBlind * 2 : 100,
+          bigBlind: last ? last.bigBlind * 2 : 200,
+          ante: last ? Math.round(last.ante * 1.5) : 0,
+          duration: 900,
+        },
+      ],
+    });
   }
 
   function addBreak() {
-    const lastLevel = config.blindStructure[config.blindStructure.length - 1];
-    const breakLevel: BlindLevel = {
-      level: (lastLevel?.level ?? 0) + 1,
-      smallBlind: 0,
-      bigBlind: 0,
-      ante: 0,
-      duration: 600,
-      isBreak: true,
-    };
-    updateConfig(id, { blindStructure: [...config.blindStructure, breakLevel] });
+    const last = draft!.blindStructure[draft!.blindStructure.length - 1];
+    commit({
+      blindStructure: [
+        ...draft!.blindStructure,
+        {
+          level: (last?.level ?? 0) + 1,
+          smallBlind: 0,
+          bigBlind: 0,
+          ante: 0,
+          duration: 600,
+          isBreak: true,
+        },
+      ],
+    });
   }
 
   function removeLevel(index: number) {
-    const newStructure = config.blindStructure.filter((_, i) => i !== index);
-    updateConfig(id, { blindStructure: newStructure });
+    commit({ blindStructure: draft!.blindStructure.filter((_, i) => i !== index) });
   }
+
+  const tableCount = Math.max(1, Math.ceil(tournament.players.length / seats));
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -85,15 +118,17 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
               <div className="space-y-2">
                 <Label>Tournament Name</Label>
                 <Input
-                  value={config.name}
-                  onChange={(e) => updateField("name", e.target.value)}
+                  value={draft.name}
+                  onChange={(e) => edit({ name: e.target.value })}
+                  onBlur={() => commit()}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Currency</Label>
                 <Input
-                  value={config.currency}
-                  onChange={(e) => updateField("currency", e.target.value)}
+                  value={draft.currency}
+                  onChange={(e) => edit({ currency: e.target.value })}
+                  onBlur={() => commit()}
                 />
               </div>
             </div>
@@ -102,66 +137,61 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
 
         <Card>
           <CardHeader>
-            <CardTitle>Buy-in & Chips</CardTitle>
+            <CardTitle>Tables</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <Label htmlFor="seats-per-table">Seats per table</Label>
+            <Input
+              id="seats-per-table"
+              type="number"
+              min={2}
+              max={10}
+              value={seats}
+              onChange={(e) => {
+                dirty.current = true;
+                setSeats(Number(e.target.value));
+              }}
+              onBlur={() => {
+                const clamped = Math.min(10, Math.max(2, seats || 9));
+                setSeats(clamped);
+                commit(undefined, clamped);
+              }}
+              className="max-w-[120px]"
+            />
+            <p className="text-sm text-muted-foreground">
+              {tournament.players.length} players &rarr; {tableCount}{" "}
+              {tableCount === 1 ? "table" : "tables"}. Redraw seats to apply.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Buy-in &amp; Chips</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label>Buy-in</Label>
-                <Input
-                  type="number"
-                  value={config.buyIn}
-                  onChange={(e) => updateField("buyIn", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Starting Chips</Label>
-                <Input
-                  type="number"
-                  value={config.startingChips}
-                  onChange={(e) => updateField("startingChips", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Last Rebuy Level</Label>
-                <Input
-                  type="number"
-                  value={config.lastRebuyLevel}
-                  onChange={(e) => updateField("lastRebuyLevel", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Rebuy Amount</Label>
-                <Input
-                  type="number"
-                  value={config.rebuyAmount}
-                  onChange={(e) => updateField("rebuyAmount", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Rebuy Chips</Label>
-                <Input
-                  type="number"
-                  value={config.rebuyChips}
-                  onChange={(e) => updateField("rebuyChips", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Addon Amount</Label>
-                <Input
-                  type="number"
-                  value={config.addonAmount}
-                  onChange={(e) => updateField("addonAmount", Number(e.target.value))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Addon Chips</Label>
-                <Input
-                  type="number"
-                  value={config.addonChips}
-                  onChange={(e) => updateField("addonChips", Number(e.target.value))}
-                />
-              </div>
+              {(
+                [
+                  ["Buy-in", "buyIn"],
+                  ["Starting Chips", "startingChips"],
+                  ["Last Rebuy Level", "lastRebuyLevel"],
+                  ["Rebuy Amount", "rebuyAmount"],
+                  ["Rebuy Chips", "rebuyChips"],
+                  ["Addon Amount", "addonAmount"],
+                  ["Addon Chips", "addonChips"],
+                ] as const
+              ).map(([label, field]) => (
+                <div key={field} className="space-y-2">
+                  <Label>{label}</Label>
+                  <Input
+                    type="number"
+                    value={draft[field]}
+                    onChange={(e) => edit({ [field]: Number(e.target.value) })}
+                    onBlur={() => commit()}
+                  />
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -173,7 +203,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => updateConfig(id, { blindStructure: [...DEFAULT_BLIND_STRUCTURE] })}
+                onClick={() => commit({ blindStructure: [...DEFAULT_BLIND_STRUCTURE] })}
               >
                 Reset to Defaults
               </Button>
@@ -196,7 +226,7 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                 <span></span>
               </div>
               <Separator />
-              {config.blindStructure.map((level, index) => (
+              {draft.blindStructure.map((level, index) => (
                 <div key={index} className="grid grid-cols-6 gap-2 items-center">
                   <span className="text-sm px-2">
                     {level.isBreak ? "Break" : `Level ${level.level}`}
@@ -208,19 +238,22 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                       <Input
                         type="number"
                         value={level.smallBlind}
-                        onChange={(e) => updateBlindLevel(index, "smallBlind", Number(e.target.value))}
+                        onChange={(e) => editBlindLevel(index, "smallBlind", Number(e.target.value))}
+                        onBlur={() => commit()}
                         className="h-8 text-sm"
                       />
                       <Input
                         type="number"
                         value={level.bigBlind}
-                        onChange={(e) => updateBlindLevel(index, "bigBlind", Number(e.target.value))}
+                        onChange={(e) => editBlindLevel(index, "bigBlind", Number(e.target.value))}
+                        onBlur={() => commit()}
                         className="h-8 text-sm"
                       />
                       <Input
                         type="number"
                         value={level.ante}
-                        onChange={(e) => updateBlindLevel(index, "ante", Number(e.target.value))}
+                        onChange={(e) => editBlindLevel(index, "ante", Number(e.target.value))}
+                        onBlur={() => commit()}
                         className="h-8 text-sm"
                       />
                     </>
@@ -228,7 +261,8 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                   <Input
                     type="number"
                     value={level.duration / 60}
-                    onChange={(e) => updateBlindLevel(index, "duration", Number(e.target.value) * 60)}
+                    onChange={(e) => editBlindLevel(index, "duration", Number(e.target.value) * 60)}
+                    onBlur={() => commit()}
                     className="h-8 text-sm"
                   />
                   <Button
