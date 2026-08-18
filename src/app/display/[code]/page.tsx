@@ -10,16 +10,14 @@ import { formatTime, getAverageStack, formatChips } from "@/lib/tournament-utils
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
+import { useAppTheme, type AppTheme } from "@/store/use-theme";
 import type { Tournament } from "@/lib/types";
 
-type DisplayTheme = "color" | "noir";
-
-const THEME_KEY = "poker-display-theme";
-
 /**
- * Both projector palettes in one place. "color" is the lively default; "noir" is
- * the original black-and-white. Full class literals on purpose — Tailwind only
- * generates classes it can see in the source.
+ * Both projector palettes in one place, keyed by the app-wide theme from
+ * useAppTheme — the projector reads across a room, so it styles itself with
+ * explicit classes instead of the semantic tokens. Full class literals on
+ * purpose — Tailwind only generates classes it can see in the source.
  */
 const THEMES = {
   color: {
@@ -60,9 +58,9 @@ const THEMES = {
     nameOpacityBase: 0.35,
     nameShadow: "none",
   },
-} satisfies Record<DisplayTheme, Record<string, unknown>>;
+} satisfies Record<AppTheme, Record<string, unknown>>;
 
-type Theme = (typeof THEMES)[DisplayTheme];
+type Theme = (typeof THEMES)[AppTheme];
 
 /**
  * The second window on an extended display: controls stay on the laptop, this goes on
@@ -80,21 +78,8 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
   const loaded = useTournamentStore((s) => s.loaded);
   useWakeLock(tournament !== undefined && tournament.status !== "finished");
 
-  const [themeName, setThemeName] = useState<DisplayTheme>("color");
-  useEffect(() => {
-    const stored = window.localStorage.getItem(THEME_KEY);
-    if (stored === "noir" || stored === "color") {
-      setThemeName(stored);
-    }
-  }, []);
-
-  function chooseTheme(next: DisplayTheme) {
-    setThemeName(next);
-    window.localStorage.setItem(THEME_KEY, next);
-  }
-
-  const theme = THEMES[themeName];
-  const toggle = <ThemeToggle themeName={themeName} onChange={chooseTheme} />;
+  // The layout's corner pill owns switching; the projector just follows along.
+  const theme = THEMES[useAppTheme((s) => s.theme)];
 
   if (!tournament) {
     return (
@@ -104,17 +89,12 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
         <p className={cn("text-4xl", theme.muted)}>
           {loaded ? `No tournament ${code}` : "Loading…"}
         </p>
-        {toggle}
       </div>
     );
   }
 
   if (tournament.status === "setup") {
-    return (
-      <PreStart tournament={tournament} theme={theme}>
-        {toggle}
-      </PreStart>
-    );
+    return <PreStart tournament={tournament} theme={theme} />;
   }
 
   const { timer, config, status, players, seatAssignments, tables } = tournament;
@@ -250,33 +230,6 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
           })}
         </div>
       )}
-      {toggle}
-    </div>
-  );
-}
-
-/** Barely-there in a corner: the projector's one interactive element. */
-function ThemeToggle({
-  themeName,
-  onChange,
-}: {
-  themeName: DisplayTheme;
-  onChange: (next: DisplayTheme) => void;
-}) {
-  return (
-    <div className="fixed bottom-4 right-4 flex rounded-full border border-white/20 overflow-hidden opacity-30 hover:opacity-100 transition-opacity">
-      {(["color", "noir"] as const).map((name) => (
-        <button
-          key={name}
-          onClick={() => onChange(name)}
-          className={cn(
-            "px-3 py-1 text-xs uppercase tracking-wider",
-            themeName === name ? "bg-white/25 text-white" : "text-white/60",
-          )}
-        >
-          {name}
-        </button>
-      ))}
     </div>
   );
 }
@@ -309,15 +262,7 @@ function nameSlot(index: number, theme: Theme) {
  * Pre-start wall: nothing but the join QR and who's in. Flips to the live
  * layout the moment the host starts, via the status branch above.
  */
-function PreStart({
-  tournament,
-  theme,
-  children,
-}: {
-  tournament: Tournament;
-  theme: Theme;
-  children?: React.ReactNode;
-}) {
+function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme }) {
   const code = tournament.code;
 
   const [joinUrl, setJoinUrl] = useState("");
@@ -385,7 +330,6 @@ function PreStart({
           {overflow > 0 && ` (+${overflow} not shown)`}
         </p>
       </div>
-      {children}
     </div>
   );
 }

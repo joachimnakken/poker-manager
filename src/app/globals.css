@@ -116,6 +116,46 @@
   --sidebar-ring: oklch(0.65 0.17 155);
 }
 
+/* The lively app-wide palette. Sits after .dark so that when html carries both
+   classes, these variables win. Everything built on the semantic tokens —
+   home, host, settings, phone — recolors from here alone; the projector page
+   styles itself explicitly and only shares the toggle. */
+.theme-color {
+  --background: oklch(0.31 0.12 300);
+  --foreground: oklch(0.98 0.01 300);
+  --card: oklch(0.37 0.13 305);
+  --card-foreground: oklch(0.98 0.01 300);
+  --popover: oklch(0.34 0.12 305);
+  --popover-foreground: oklch(0.98 0.01 300);
+  --primary: oklch(0.82 0.16 85);
+  --primary-foreground: oklch(0.26 0.1 300);
+  --secondary: oklch(0.44 0.14 320);
+  --secondary-foreground: oklch(0.98 0.01 300);
+  --muted: oklch(0.4 0.11 305);
+  --muted-foreground: oklch(0.84 0.05 305);
+  --accent: oklch(0.47 0.16 330);
+  --accent-foreground: oklch(0.98 0.01 300);
+  --destructive: oklch(0.7 0.21 20);
+  --border: oklch(0.55 0.12 310 / 55%);
+  --input: oklch(0.45 0.12 310);
+  --ring: oklch(0.74 0.19 330);
+  --chart-1: oklch(0.82 0.16 85);
+  --chart-2: oklch(0.78 0.13 200);
+  --chart-3: oklch(0.8 0.17 140);
+  --chart-4: oklch(0.74 0.19 330);
+  --chart-5: oklch(0.7 0.19 20);
+}
+
+.theme-color body {
+  background-image: linear-gradient(
+    135deg,
+    oklch(0.33 0.14 285),
+    oklch(0.35 0.15 320) 55%,
+    oklch(0.39 0.14 345)
+  );
+  background-attachment: fixed;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
