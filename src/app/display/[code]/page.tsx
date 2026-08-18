@@ -12,10 +12,62 @@ import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
 import type { Tournament } from "@/lib/types";
 
+type DisplayTheme = "color" | "noir";
+
+const THEME_KEY = "poker-display-theme";
+
+/**
+ * Both projector palettes in one place. "color" is the lively default; "noir" is
+ * the original black-and-white. Full class literals on purpose — Tailwind only
+ * generates classes it can see in the source.
+ */
+const THEMES = {
+  color: {
+    pageBg: "bg-gradient-to-br from-indigo-800 via-violet-800 to-fuchsia-700",
+    prestartBg: "bg-gradient-to-br from-violet-700 via-fuchsia-600 to-orange-500",
+    statusLabel: "text-amber-300",
+    levelLabel: "text-cyan-200",
+    muted: "text-white/60",
+    payoutPosition: "text-amber-300",
+    seatNumber: "text-white/50",
+    busted: "text-white/40 line-through",
+    tableCard: "border border-white/20 bg-white/10",
+    statCard: "rounded-2xl bg-white/10 p-4",
+    critical: "text-red-300",
+    accent: "text-amber-300",
+    qrCard: "shadow-2xl shadow-fuchsia-950/50",
+    prestartHint: "text-white/90",
+    nameColors: ["text-amber-300", "text-cyan-200", "text-lime-300", "text-rose-200", "text-white"],
+    nameOpacityBase: 0.65,
+    nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
+  },
+  noir: {
+    pageBg: "bg-black",
+    prestartBg: "bg-black",
+    statusLabel: "text-zinc-500",
+    levelLabel: "text-zinc-500",
+    muted: "text-zinc-500",
+    payoutPosition: "text-zinc-400",
+    seatNumber: "text-zinc-600",
+    busted: "text-zinc-600 line-through",
+    tableCard: "border border-zinc-800",
+    statCard: "rounded-2xl border border-zinc-800 p-4",
+    critical: "text-red-500",
+    accent: "text-amber-400",
+    qrCard: "",
+    prestartHint: "text-zinc-500",
+    nameColors: ["text-zinc-400"],
+    nameOpacityBase: 0.35,
+    nameShadow: "none",
+  },
+} satisfies Record<DisplayTheme, Record<string, unknown>>;
+
+type Theme = (typeof THEMES)[DisplayTheme];
+
 /**
  * The second window on an extended display: controls stay on the laptop, this goes on
- * the projector. Everything here is sized to be read across a room, and nothing is
- * interactive — a stray click on a projector is always a mistake.
+ * the projector. Everything here is sized to be read across a room, and nothing but
+ * the theme toggle is interactive — a stray click on a projector is always a mistake.
  */
 export default function DisplayPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
@@ -28,16 +80,41 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
   const loaded = useTournamentStore((s) => s.loaded);
   useWakeLock(tournament !== undefined && tournament.status !== "finished");
 
+  const [themeName, setThemeName] = useState<DisplayTheme>("color");
+  useEffect(() => {
+    const stored = window.localStorage.getItem(THEME_KEY);
+    if (stored === "noir" || stored === "color") {
+      setThemeName(stored);
+    }
+  }, []);
+
+  function chooseTheme(next: DisplayTheme) {
+    setThemeName(next);
+    window.localStorage.setItem(THEME_KEY, next);
+  }
+
+  const theme = THEMES[themeName];
+  const toggle = <ThemeToggle themeName={themeName} onChange={chooseTheme} />;
+
   if (!tournament) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white">
-        <p className="text-4xl text-zinc-500">{loaded ? `No tournament ${code}` : "Loading…"}</p>
+      <div
+        className={cn("min-h-screen flex items-center justify-center text-white", theme.prestartBg)}
+      >
+        <p className={cn("text-4xl", theme.muted)}>
+          {loaded ? `No tournament ${code}` : "Loading…"}
+        </p>
+        {toggle}
       </div>
     );
   }
 
   if (tournament.status === "setup") {
-    return <PreStart tournament={tournament} />;
+    return (
+      <PreStart tournament={tournament} theme={theme}>
+        {toggle}
+      </PreStart>
+    );
   }
 
   const { timer, config, status, players, seatAssignments, tables } = tournament;
@@ -51,10 +128,10 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
   );
 
   return (
-    <div className="min-h-screen bg-black text-white p-8 flex flex-col gap-8">
+    <div className={cn("min-h-screen text-white p-8 flex flex-col gap-8", theme.pageBg)}>
       <div className="flex items-baseline justify-between">
         <h1 className="text-5xl font-bold">{config.name}</h1>
-        <span className="text-3xl text-zinc-500 uppercase tracking-widest">
+        <span className={cn("text-3xl uppercase tracking-widest", theme.statusLabel)}>
           {status === "break" ? "Break" : status}
         </span>
       </div>
@@ -62,16 +139,16 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8 items-center">
         <div className="text-center space-y-4">
           {level?.isBreak ? (
-            <div className="text-6xl font-medium text-amber-400 uppercase tracking-widest">
+            <div className={cn("text-6xl font-medium uppercase tracking-widest", theme.accent)}>
               Break
             </div>
           ) : (
             <>
-              <div className="text-4xl text-zinc-500">Level {level?.level}</div>
+              <div className={cn("text-4xl", theme.levelLabel)}>Level {level?.level}</div>
               <div className="text-8xl font-bold tabular-nums">
                 {level?.smallBlind.toLocaleString()}/{level?.bigBlind.toLocaleString()}
                 {level && level.ante > 0 && (
-                  <span className="text-5xl text-zinc-500 ml-4">
+                  <span className={cn("text-5xl ml-4", theme.muted)}>
                     ante {level.ante.toLocaleString()}
                   </span>
                 )}
@@ -82,15 +159,15 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
           <div
             className={cn(
               "text-[10rem] leading-none font-mono font-bold tabular-nums",
-              isCritical && "text-red-500",
-              status === "paused" && "text-amber-400 animate-pulse",
+              isCritical && theme.critical,
+              status === "paused" && cn(theme.accent, "animate-pulse"),
             )}
           >
             {formatTime(timer.secondsRemaining)}
           </div>
 
           {next && (
-            <div className="text-3xl text-zinc-500">
+            <div className={cn("text-3xl", theme.muted)}>
               Next:{" "}
               {next.isBreak
                 ? "Break"
@@ -101,18 +178,22 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
 
         <div className="space-y-8">
           <div className="grid grid-cols-2 gap-6 text-center">
-            <Stat label="Players left" value={`${active.length}/${players.length}`} />
-            <Stat label="Prize pool" value={formatCurrency(calculateTotalPot(players, config), config.currency)} />
-            <Stat label="Avg stack" value={formatChips(getAverageStack(tournament))} />
-            <Stat label="Tables" value={String(Math.max(tableNumbers.length, 1))} />
+            <Stat theme={theme} label="Players left" value={`${active.length}/${players.length}`} />
+            <Stat
+              theme={theme}
+              label="Prize pool"
+              value={formatCurrency(calculateTotalPot(players, config), config.currency)}
+            />
+            <Stat theme={theme} label="Avg stack" value={formatChips(getAverageStack(tournament))} />
+            <Stat theme={theme} label="Tables" value={String(Math.max(tableNumbers.length, 1))} />
           </div>
 
           {payouts.length > 0 && (
             <div className="space-y-1">
-              <div className="text-2xl text-zinc-500">Payouts</div>
+              <div className={cn("text-2xl uppercase tracking-wider", theme.muted)}>Payouts</div>
               {payouts.map((payout) => (
                 <div key={payout.position} className="flex justify-between text-3xl">
-                  <span className="text-zinc-400">#{payout.position}</span>
+                  <span className={theme.payoutPosition}>#{payout.position}</span>
                   <span className="font-medium">
                     {formatCurrency(payout.amount, config.currency)}
                   </span>
@@ -124,7 +205,10 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
       </div>
 
       {tableNumbers.length > 0 && (
-        <div className="grid gap-6" style={{ gridTemplateColumns: `repeat(${Math.min(tableNumbers.length, 4)}, minmax(0, 1fr))` }}>
+        <div
+          className="grid gap-6"
+          style={{ gridTemplateColumns: `repeat(${Math.min(tableNumbers.length, 4)}, minmax(0, 1fr))` }}
+        >
           {tableNumbers.map((tableNumber) => {
             const seats = (seatAssignments ?? [])
               .filter((a) => a.table === tableNumber)
@@ -135,10 +219,10 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
             ).length;
 
             return (
-              <div key={tableNumber} className="rounded-2xl border border-zinc-800 p-5">
+              <div key={tableNumber} className={cn("rounded-2xl p-5", theme.tableCard)}>
                 <div className="flex items-baseline justify-between mb-3">
                   <span className="text-3xl font-semibold">Table {tableNumber}</span>
-                  <span className="text-2xl text-zinc-500">{left} left</span>
+                  <span className={cn("text-2xl", theme.levelLabel)}>{left} left</span>
                 </div>
                 <div className="space-y-1">
                   {seats.map((assignment) => {
@@ -149,12 +233,14 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
                         key={`${assignment.table}-${assignment.seat}`}
                         className={cn(
                           "flex items-baseline gap-3 text-2xl",
-                          !player.isActive && "text-zinc-600 line-through",
+                          !player.isActive && theme.busted,
                         )}
                       >
-                        <span className="text-zinc-600 font-mono w-8">{assignment.seat}</span>
+                        <span className={cn("font-mono w-8", theme.seatNumber)}>
+                          {assignment.seat}
+                        </span>
                         <span className="truncate">{player.name}</span>
-                        {player.id === captainId && <span className="text-amber-400">★</span>}
+                        {player.id === captainId && <span className={theme.accent}>★</span>}
                       </div>
                     );
                   })}
@@ -164,6 +250,33 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
           })}
         </div>
       )}
+      {toggle}
+    </div>
+  );
+}
+
+/** Barely-there in a corner: the projector's one interactive element. */
+function ThemeToggle({
+  themeName,
+  onChange,
+}: {
+  themeName: DisplayTheme;
+  onChange: (next: DisplayTheme) => void;
+}) {
+  return (
+    <div className="fixed bottom-4 right-4 flex rounded-full border border-white/20 overflow-hidden opacity-30 hover:opacity-100 transition-opacity">
+      {(["color", "noir"] as const).map((name) => (
+        <button
+          key={name}
+          onClick={() => onChange(name)}
+          className={cn(
+            "px-3 py-1 text-xs uppercase tracking-wider",
+            themeName === name ? "bg-white/25 text-white" : "text-white/60",
+          )}
+        >
+          {name}
+        </button>
+      ))}
     </div>
   );
 }
@@ -176,7 +289,7 @@ const MAX_FLOATING_NAMES = 24;
  * bands around the centered QR card. Deterministic on purpose — the page
  * re-renders on every poll, and names must hold their positions across passes.
  */
-function nameSlot(index: number) {
+function nameSlot(index: number, theme: Theme) {
   const angle = index * 137.5 * (Math.PI / 180);
   const radius = index % 2 === 0 ? 30 : 41;
   const top = Math.min(92, Math.max(8, 50 + radius * Math.sin(angle)));
@@ -185,7 +298,8 @@ function nameSlot(index: number) {
     top: `${top}%`,
     left: `${left}%`,
     fontSize: `${1.5 + (index % 5) * 0.25}rem`,
-    opacity: 0.35 + (index % 4) * 0.08,
+    opacity: theme.nameOpacityBase + (index % 4) * 0.08,
+    color: theme.nameColors[index % theme.nameColors.length],
     animationDuration: `${8 + (index % 7)}s, 1.2s`,
     animationDelay: `${-(index % 9)}s, 0s`,
   };
@@ -195,7 +309,15 @@ function nameSlot(index: number) {
  * Pre-start wall: nothing but the join QR and who's in. Flips to the live
  * layout the moment the host starts, via the status branch above.
  */
-function PreStart({ tournament }: { tournament: Tournament }) {
+function PreStart({
+  tournament,
+  theme,
+  children,
+}: {
+  tournament: Tournament;
+  theme: Theme;
+  children?: React.ReactNode;
+}) {
   const code = tournament.code;
 
   const [joinUrl, setJoinUrl] = useState("");
@@ -212,18 +334,25 @@ function PreStart({ tournament }: { tournament: Tournament }) {
   const overflow = names.length - floating.length;
 
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden flex items-center justify-center p-8">
+    <div
+      className={cn(
+        "min-h-screen text-white relative overflow-hidden flex items-center justify-center p-8",
+        theme.prestartBg,
+      )}
+    >
       {floating.map((name, index) => {
-        const { top, left, fontSize, opacity, animationDuration, animationDelay } = nameSlot(index);
+        const { top, left, fontSize, opacity, color, animationDuration, animationDelay } =
+          nameSlot(index, theme);
         return (
           <span
             key={name}
-            className="absolute font-semibold text-zinc-400 whitespace-nowrap select-none"
+            className={cn("absolute font-semibold whitespace-nowrap select-none", color)}
             style={{
               top,
               left,
               fontSize,
               opacity,
+              textShadow: theme.nameShadow,
               transform: "translate(-50%, -50%)",
               animationName: "projector-float, projector-fade-in",
               animationDuration,
@@ -238,26 +367,33 @@ function PreStart({ tournament }: { tournament: Tournament }) {
       })}
 
       <div className="relative flex flex-col items-center gap-6">
-        <div className="bg-white p-8 rounded-3xl flex flex-col items-center gap-5" data-testid="prestart-qr">
+        <div
+          className={cn("bg-white p-8 rounded-3xl flex flex-col items-center gap-5", theme.qrCard)}
+          data-testid="prestart-qr"
+        >
           {joinUrl && <QRCode value={joinUrl} size={340} />}
           <div className="text-center text-black">
             <div className="text-xl text-zinc-600">Join code</div>
             <div className="text-6xl font-mono font-bold tracking-[0.2em]">{code}</div>
           </div>
         </div>
-        <p className="text-2xl text-zinc-500">
+        <p
+          className={cn("text-2xl", theme.prestartHint)}
+          style={{ textShadow: theme.nameShadow }}
+        >
           Scan to join &middot; {names.length} checked in
           {overflow > 0 && ` (+${overflow} not shown)`}
         </p>
       </div>
+      {children}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ theme, label, value }: { theme: Theme; label: string; value: string }) {
   return (
-    <div>
-      <div className="text-xl text-zinc-500 uppercase tracking-wider">{label}</div>
+    <div className={theme.statCard}>
+      <div className={cn("text-xl uppercase tracking-wider", theme.muted)}>{label}</div>
       <div className="text-5xl font-bold tabular-nums">{value}</div>
     </div>
   );
