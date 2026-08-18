@@ -4,15 +4,20 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import "./globals.css";
 
 /**
- * Applies the stored theme before first paint, so a color-themed device never
- * flashes the noir palette while React hydrates. Mirrors zustand-persist's
- * storage shape under the "poker-theme" key; the default is color.
+ * Applies the stored theme before first paint, so a themed device never flashes
+ * the noir palette while React hydrates. Mirrors zustand-persist's storage shape
+ * under the "poker-theme" key; "color" is the retired v0 name for sunset, and
+ * sunset is the default.
  */
 const themeInitScript = `try {
   var stored = JSON.parse(localStorage.getItem("poker-theme"));
-  if (!stored || stored.state.theme !== "noir") document.documentElement.classList.add("theme-color");
+  var theme = stored && stored.state && stored.state.theme;
+  if (theme !== "noir") {
+    var known = ["sunset", "felt", "ocean", "ember"];
+    document.documentElement.classList.add("theme-" + (known.indexOf(theme) === -1 ? "sunset" : theme));
+  }
 } catch (e) {
-  document.documentElement.classList.add("theme-color");
+  document.documentElement.classList.add("theme-sunset");
 }`;
 
 const geistSans = Geist({
