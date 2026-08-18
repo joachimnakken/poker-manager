@@ -356,7 +356,12 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
 }) => {
   const host = await openDevice(browser);
   const phone = await openDevice(browser, { viewport: PHONE });
+  const projector = await openDevice(browser);
   const code = await createTournament(host.page, "Lifecycle Night");
+
+  // The projector's pre-start wall: QR + whoever has checked in, nothing else.
+  await projector.page.goto(`/display/${code}`);
+  await expect(projector.page.getByTestId("prestart-qr")).toBeVisible();
 
   const noOverflow = async () => {
     const overflow = await phone.page.evaluate(
@@ -375,6 +380,10 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await expect(phone.page.getByText("Waiting for the host to draw seats…")).toBeVisible();
   await noOverflow();
 
+  // ...and the name floats onto the projector within a poll.
+  await expect(projector.page.getByText("Solo", { exact: true })).toBeVisible({ timeout: 5000 });
+  await expect(projector.page.getByText(/1 checked in/)).toBeVisible();
+
   // setup, seat drawn
   await addPlayer(host.page, "Pair");
   await host.page.getByRole("tab", { name: "Seating" }).click();
@@ -386,6 +395,10 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await host.page.getByRole("button", { name: "Start Tournament" }).click();
   await expect(phone.page.getByTestId("players-left")).toHaveText("2/2", { timeout: 8000 });
   await noOverflow();
+
+  // Starting flips the projector from the QR wall to live play.
+  await expect(projector.page.getByTestId("prestart-qr")).not.toBeVisible({ timeout: 8000 });
+  await expect(projector.page.getByText(/^Level \d/).first()).toBeVisible();
 
   // the standalone clock layout, remembered per device
   await phone.page.getByRole("button", { name: "Clock" }).click();

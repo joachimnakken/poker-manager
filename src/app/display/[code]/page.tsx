@@ -10,6 +10,7 @@ import { formatTime, getAverageStack, formatChips } from "@/lib/tournament-utils
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
+import type { Tournament } from "@/lib/types";
 
 /**
  * The second window on an extended display: controls stay on the laptop, this goes on
@@ -18,17 +19,14 @@ import { cn } from "@/lib/utils";
  */
 export default function DisplayPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = use(params);
-  useTournamentSync(code);
+  // Always the live poll rate: the wall is where new check-ins and the
+  // flip-to-play moment have to feel immediate.
+  useTournamentSync(code, { live: true });
   useClockTick(code);
 
   const tournament = useTournamentStore((s) => s.tournaments[code]);
   const loaded = useTournamentStore((s) => s.loaded);
-  useWakeLock(tournament?.timer.isRunning ?? false);
-
-  const [joinUrl, setJoinUrl] = useState("");
-  useEffect(() => {
-    setJoinUrl(`${window.location.origin}/t/${code}`);
-  }, [code]);
+  useWakeLock(tournament !== undefined && tournament.status !== "finished");
 
   if (!tournament) {
     return (
@@ -36,6 +34,10 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
         <p className="text-4xl text-zinc-500">{loaded ? `No tournament ${code}` : "Loading…"}</p>
       </div>
     );
+  }
+
+  if (tournament.status === "setup") {
+    return <PreStart tournament={tournament} />;
   }
 
   const { timer, config, status, players, seatAssignments, tables } = tournament;
@@ -98,16 +100,6 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
         </div>
 
         <div className="space-y-8">
-          {status === "setup" && joinUrl && (
-            <div className="bg-white p-6 rounded-2xl flex flex-col items-center gap-4">
-              <QRCode value={joinUrl} size={260} />
-              <div className="text-center text-black">
-                <div className="text-xl text-zinc-600">Join code</div>
-                <div className="text-6xl font-mono font-bold tracking-[0.2em]">{code}</div>
-              </div>
-            </div>
-          )}
-
           <div className="grid grid-cols-2 gap-6 text-center">
             <Stat label="Players left" value={`${active.length}/${players.length}`} />
             <Stat label="Prize pool" value={formatCurrency(calculateTotalPot(players, config), config.currency)} />
@@ -172,6 +164,92 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** How many floating names the slot ring holds before overflowing into "+N more". */
+const MAX_FLOATING_NAMES = 24;
+
+/**
+ * A deterministic slot per check-in index: golden-angle spacing on two radius
+ * bands around the centered QR card. Deterministic on purpose — the page
+ * re-renders on every poll, and names must hold their positions across passes.
+ */
+function nameSlot(index: number) {
+  const angle = index * 137.5 * (Math.PI / 180);
+  const radius = index % 2 === 0 ? 30 : 41;
+  const top = Math.min(92, Math.max(8, 50 + radius * Math.sin(angle)));
+  const left = Math.min(93, Math.max(7, 50 + radius * 1.25 * Math.cos(angle)));
+  return {
+    top: `${top}%`,
+    left: `${left}%`,
+    fontSize: `${1.5 + (index % 5) * 0.25}rem`,
+    opacity: 0.35 + (index % 4) * 0.08,
+    animationDuration: `${8 + (index % 7)}s, 1.2s`,
+    animationDelay: `${-(index % 9)}s, 0s`,
+  };
+}
+
+/**
+ * Pre-start wall: nothing but the join QR and who's in. Flips to the live
+ * layout the moment the host starts, via the status branch above.
+ */
+function PreStart({ tournament }: { tournament: Tournament }) {
+  const code = tournament.code;
+
+  const [joinUrl, setJoinUrl] = useState("");
+  useEffect(() => {
+    // The deployment-specific *.vercel.app origins sit behind Vercel SSO, so a QR
+    // built from window.location.origin can dead-end a guest's phone on a login
+    // page. The canonical public URL wins when configured.
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin;
+    setJoinUrl(`${base}/t/${code}`);
+  }, [code]);
+
+  const names = tournament.players.map((player) => player.name);
+  const floating = names.slice(0, MAX_FLOATING_NAMES);
+  const overflow = names.length - floating.length;
+
+  return (
+    <div className="min-h-screen bg-black text-white relative overflow-hidden flex items-center justify-center p-8">
+      {floating.map((name, index) => {
+        const { top, left, fontSize, opacity, animationDuration, animationDelay } = nameSlot(index);
+        return (
+          <span
+            key={name}
+            className="absolute font-semibold text-zinc-400 whitespace-nowrap select-none"
+            style={{
+              top,
+              left,
+              fontSize,
+              opacity,
+              transform: "translate(-50%, -50%)",
+              animationName: "projector-float, projector-fade-in",
+              animationDuration,
+              animationDelay,
+              animationTimingFunction: "ease-in-out, ease-out",
+              animationIterationCount: "infinite, 1",
+            }}
+          >
+            {name}
+          </span>
+        );
+      })}
+
+      <div className="relative flex flex-col items-center gap-6">
+        <div className="bg-white p-8 rounded-3xl flex flex-col items-center gap-5" data-testid="prestart-qr">
+          {joinUrl && <QRCode value={joinUrl} size={340} />}
+          <div className="text-center text-black">
+            <div className="text-xl text-zinc-600">Join code</div>
+            <div className="text-6xl font-mono font-bold tracking-[0.2em]">{code}</div>
+          </div>
+        </div>
+        <p className="text-2xl text-zinc-500">
+          Scan to join &middot; {names.length} checked in
+          {overflow > 0 && ` (+${overflow} not shown)`}
+        </p>
+      </div>
     </div>
   );
 }

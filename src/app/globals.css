@@ -124,3 +124,27 @@
     @apply bg-background text-foreground;
   }
 }
+/* Projector pre-start: player names drifting around the QR card. The base
+   translate(-50%, -50%) centers each name on its slot, so the keyframes must
+   carry it — an animation replaces the whole transform. */
+@keyframes projector-float {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  25% {
+    transform: translate(-50%, -50%) translate(9px, -12px);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(-7px, 10px);
+  }
+  75% {
+    transform: translate(-50%, -50%) translate(11px, 6px);
+  }
+}
+
+@keyframes projector-fade-in {
+  from {
+    opacity: 0;
+  }
+}
