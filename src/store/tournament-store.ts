@@ -2,9 +2,9 @@
 
 import { create } from "zustand";
 import type { Tournament, TournamentConfig } from "@/lib/types";
-import type { CheckinResponse, ListResponse, StateResponse } from "@/lib/api";
+import type { CheckinRequest, CheckinResponse, ListResponse, StateResponse } from "@/lib/api";
 import { levelsOverrun, readClock, serverOffset } from "@/lib/clock";
-import { setIdentity, tokenFor } from "@/lib/identity";
+import { setIdentity, setProfile, tokenFor } from "@/lib/identity";
 import type { Action } from "@/lib/actions";
 import type { Move } from "@/lib/balancing";
 import type { ProposalOp } from "@/lib/proposal-ops";
@@ -33,7 +33,7 @@ interface TournamentState {
     seatsPerTable?: number,
   ) => Promise<void>;
 
-  addPlayer: (tournamentId: string, name: string) => Promise<void>;
+  addPlayer: (tournamentId: string, firstName: string, lastName: string) => Promise<void>;
   removePlayer: (tournamentId: string, playerId: string) => Promise<void>;
 
   startTournament: (id: string) => Promise<void>;
@@ -82,7 +82,7 @@ interface TournamentState {
   forceProposal: (tournamentId: string, id: string) => Promise<void>;
   cancelProposal: (tournamentId: string, id: string) => Promise<void>;
 
-  checkIn: (code: string, name: string) => Promise<CheckinResponse | null>;
+  checkIn: (code: string, request: CheckinRequest) => Promise<CheckinResponse | null>;
 }
 
 /** Applies the client's clock offset so `timer` reflects the anchor, not local time. */
@@ -224,7 +224,8 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
     updateConfig: (id, config, seatsPerTable) =>
       act(id, { type: "update-config", config, seatsPerTable }),
 
-    addPlayer: (tournamentId, name) => act(tournamentId, { type: "add-player", name }),
+    addPlayer: (tournamentId, firstName, lastName) =>
+      act(tournamentId, { type: "add-player", firstName, lastName }),
     removePlayer: (tournamentId, playerId) =>
       act(tournamentId, { type: "remove-player", playerId }),
 
@@ -274,7 +275,10 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
       const code = await get().createTournament(source.config.name, today);
       await get().updateConfig(code, source.config, source.seatsPerTable);
       for (const player of source.players) {
-        await get().addPlayer(code, player.name);
+        // Names are stored as "First Last"; the first word is the first name, the
+        // rest the last — matching how check-in composed them.
+        const [firstName, ...rest] = player.name.split(" ");
+        await get().addPlayer(code, firstName, rest.join(" ") || firstName);
       }
       return code;
     },
@@ -307,13 +311,19 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
     forceProposal: (tournamentId, id) => propose(tournamentId, { op: "force", id }),
     cancelProposal: (tournamentId, id) => propose(tournamentId, { op: "cancel", id }),
 
-    checkIn: async (code, name) => {
+    checkIn: async (code, checkinRequest) => {
       try {
         const result = await request<CheckinResponse & StateResponse>(`/api/t/${code}/checkin`, {
           method: "POST",
-          body: JSON.stringify({ name }),
+          body: JSON.stringify(checkinRequest),
         });
         setIdentity(code, { playerToken: result.playerToken, playerId: result.playerId });
+        // The profile outlives the tournament: next poker night starts at "Join as X".
+        setProfile({
+          profileToken: result.profileToken,
+          firstName: result.firstName,
+          lastName: result.lastName,
+        });
         absorb(result);
         return result;
       } catch (error) {

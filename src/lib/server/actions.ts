@@ -1,4 +1,5 @@
 import { query, serializable, type PoolClient } from "./db";
+import { findOrCreateProfile } from "./profiles";
 import type { TournamentConfig, TournamentStatus } from "../types";
 import type { Action } from "../actions";
 
@@ -447,14 +448,18 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
 
     case "add-player": {
       requireOwner(actor);
-      const name = action.name.trim();
-      if (!name) {
-        throw new ActionError("Name required", 400);
+      const firstName = action.firstName.trim();
+      const lastName = action.lastName.trim();
+      if (!firstName || !lastName) {
+        throw new ActionError("First and last name required", 400);
       }
+      // Host-added players get a profile too — their night must count in career stats
+      // even if they never open their phone.
+      const profile = await findOrCreateProfile(firstName, lastName);
       await query(
-        `insert into players (tournament_id, name) values ($1, $2)
-         on conflict (tournament_id, name) do nothing`,
-        [id, name],
+        `insert into players (tournament_id, name, profile_id) values ($1, $2, $3)
+         on conflict (tournament_id, name) do update set profile_id = excluded.profile_id`,
+        [id, `${profile.firstName} ${profile.lastName}`, profile.id],
       );
       return;
     }

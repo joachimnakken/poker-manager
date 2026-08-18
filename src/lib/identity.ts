@@ -45,3 +45,42 @@ export function tokenFor(code: string): string | undefined {
   const identity = getIdentity(code);
   return identity.ownerToken ?? identity.playerToken;
 }
+
+/**
+ * The device's owner across tournaments — set after any successful check-in, so the
+ * next poker night opens with a one-tap "Join as X". The names ride along because the
+ * server treats a stale token + names as an ordinary named check-in.
+ */
+export interface StoredProfile {
+  profileToken: string;
+  firstName: string;
+  lastName: string;
+}
+
+const PROFILE_KEY = "poker-profile";
+
+export function getProfile(): StoredProfile | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(PROFILE_KEY) ?? "null") as
+      | StoredProfile
+      | null;
+    return stored?.profileToken && stored.firstName && stored.lastName ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setProfile(profile: StoredProfile): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }
+}
+
+export function clearProfile(): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(PROFILE_KEY);
+  }
+}

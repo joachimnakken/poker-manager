@@ -14,7 +14,7 @@ export type Action =
   | { type: "prev-level" }
   | { type: "reset-level" }
   | { type: "advance-level"; fromIndex: number }
-  | { type: "add-player"; name: string }
+  | { type: "add-player"; firstName: string; lastName: string }
   | { type: "remove-player"; playerId: string }
   | { type: "knockout"; playerId: string; byPlayerId?: string }
   | { type: "undo-knockout" }

@@ -27,6 +27,9 @@ export default function HomePage() {
           <p className="text-muted-foreground">
             Manage blinds, players, and payouts for your home games
           </p>
+          <Link href="/stats" className="inline-block text-sm text-primary underline">
+            Career stats
+          </Link>
         </div>
 
         <CreateTournamentForm />

@@ -5,7 +5,9 @@ import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentSync } from "@/store/use-sync";
 import { useClockTick } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
-import { getIdentity } from "@/lib/identity";
+import { clearProfile, getIdentity, getProfile, type StoredProfile } from "@/lib/identity";
+import { didYouMean } from "@/lib/name-match";
+import type { CheckinRequest, ProfileStats, StatsResponse } from "@/lib/api";
 import { formatTime, formatChips, getAverageStack, formatCurrency } from "@/lib/tournament-utils";
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { CHIP_SET } from "@/lib/constants";
@@ -34,6 +36,7 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [layout, setLayout] = useState<Layout>("companion");
+  const [myStats, setMyStats] = useState<ProfileStats | null>(null);
 
   useEffect(() => {
     const identity = getIdentity(code);
@@ -94,10 +97,11 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
           // Identity is read from localStorage on mount, so checking in has to hand the
           // new player id back or this device would keep showing the form.
           <CheckIn
-            onSubmit={async (name) => {
-              const result = await checkIn(code, name);
+            onSubmit={async (request) => {
+              const result = await checkIn(code, request);
               if (result) {
                 setPlayerId(result.playerId);
+                setMyStats(result.stats);
               }
             }}
           />
@@ -112,7 +116,7 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
       ) : tournament.status === "finished" ? (
         <Results tournament={tournament} me={me} />
       ) : tournament.status === "setup" ? (
-        <PreGame tournament={tournament} me={me} seat={myTable} />
+        <PreGame tournament={tournament} me={me} seat={myTable} stats={myStats} />
       ) : !me.isActive ? (
         <Busted tournament={tournament} me={me} />
       ) : (
@@ -227,10 +231,127 @@ function StandaloneClock({ tournament }: { tournament: Tournament }) {
   );
 }
 
-function CheckIn({ onSubmit }: { onSubmit: (name: string) => Promise<unknown> }) {
-  const [name, setName] = useState("");
+function CheckIn({ onSubmit }: { onSubmit: (request: CheckinRequest) => Promise<unknown> }) {
+  // The stored profile makes a returning device one tap; localStorage is mount-only.
+  const [profile, setStoredProfile] = useState<StoredProfile | null>(null);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [busy, setBusy] = useState(false);
+  // A near-miss against an existing profile ("Joachm" vs "Joachim") pauses the submit
+  // and asks, rather than silently creating a duplicate — or worse, merging two people.
+  const [suggestion, setSuggestion] = useState<{ firstName: string; lastName: string } | null>(
+    null,
+  );
 
+  useEffect(() => {
+    setStoredProfile(getProfile());
+  }, []);
+
+  async function submit(request: CheckinRequest) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onSubmit(request);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Checks the typed name against known profiles before committing to a new one. */
+  async function submitTyped() {
+    const typed = { firstName: firstName.trim(), lastName: lastName.trim() };
+    setBusy(true);
+    try {
+      const data: StatsResponse = await fetch("/api/stats", { cache: "no-store" }).then(
+        (response) => response.json(),
+      );
+      const index = didYouMean(
+        `${typed.firstName} ${typed.lastName}`,
+        data.leaderboard.map((entry) => `${entry.firstName} ${entry.lastName}`),
+      );
+      if (index !== null) {
+        const match = data.leaderboard[index];
+        setSuggestion({ firstName: match.firstName, lastName: match.lastName });
+        return;
+      }
+    } catch {
+      // If the lookup fails, check in on the typed name — the prompt is best-effort.
+    } finally {
+      setBusy(false);
+    }
+    await submit(typed);
+  }
+
+  if (profile) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Welcome back</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            className="w-full"
+            disabled={busy}
+            data-testid="join-as-profile"
+            onClick={() => submit(profile)}
+          >
+            {busy ? "Checking in…" : `Join as ${profile.firstName} ${profile.lastName}`}
+          </Button>
+          <button
+            type="button"
+            className="w-full text-center text-xs text-muted-foreground underline"
+            onClick={() => {
+              clearProfile();
+              setStoredProfile(null);
+            }}
+          >
+            Not {profile.firstName}? Check in with another name
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (suggestion) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Have we met?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            {firstName.trim()} {lastName.trim()} is close to a name we already know.
+          </p>
+          <Button
+            className="w-full"
+            disabled={busy}
+            data-testid="checkin-existing-profile"
+            onClick={() => submit(suggestion)}
+          >
+            {busy ? "Checking in…" : `Yes, I'm ${suggestion.firstName} ${suggestion.lastName}`}
+          </Button>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={busy}
+            data-testid="checkin-new-profile"
+            onClick={() => submit({ firstName: firstName.trim(), lastName: lastName.trim() })}
+          >
+            No, I&apos;m new — join as {firstName.trim()} {lastName.trim()}
+          </Button>
+          <button
+            type="button"
+            className="w-full text-center text-xs text-muted-foreground underline"
+            onClick={() => setSuggestion(null)}
+          >
+            Go back and retype
+          </button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const complete = firstName.trim() && lastName.trim();
   return (
     <Card>
       <CardHeader>
@@ -241,25 +362,90 @@ function CheckIn({ onSubmit }: { onSubmit: (name: string) => Promise<unknown> })
           className="space-y-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (!name.trim() || busy) return;
-            setBusy(true);
-            try {
-              await onSubmit(name.trim());
-            } finally {
-              setBusy(false);
-            }
+            if (!complete) return;
+            await submitTyped();
           }}
         >
           <Input
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="name"
+            placeholder="First name"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            autoComplete="given-name"
           />
-          <Button type="submit" className="w-full" disabled={!name.trim() || busy}>
+          <Input
+            placeholder="Last name"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            autoComplete="family-name"
+          />
+          <Button type="submit" className="w-full" disabled={!complete || busy}>
             {busy ? "Checking in…" : "I'm in"}
           </Button>
         </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Career record across finished nights. During a normal check-in the stats arrive with
+ * the response; after a refresh they are refetched from the leaderboard and matched by
+ * the stored name (unique per profile, so the match is exact).
+ */
+function CareerCard({ stats: given }: { stats: ProfileStats | null }) {
+  const [stats, setStats] = useState<ProfileStats | null>(given);
+
+  useEffect(() => {
+    if (given) {
+      setStats(given);
+      return;
+    }
+    const profile = getProfile();
+    if (!profile) return;
+    let cancelled = false;
+    fetch("/api/stats", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((data: StatsResponse) => {
+        if (cancelled) return;
+        setStats(
+          data.leaderboard.find(
+            (entry) =>
+              entry.firstName.toLowerCase() === profile.firstName.toLowerCase() &&
+              entry.lastName.toLowerCase() === profile.lastName.toLowerCase(),
+          ) ?? null,
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [given]);
+
+  if (!stats) return null;
+
+  return (
+    <Card data-testid="career-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Your career</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {stats.nights === 0 ? (
+          <p className="text-sm text-muted-foreground">First night on record — good luck!</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <MiniStat label="Nights" value={String(stats.nights)} />
+            <MiniStat label="Wins" value={String(stats.wins)} />
+            <MiniStat label="KOs" value={String(stats.knockouts)} />
+            <MiniStat
+              label="Best finish"
+              value={stats.bestFinish !== null ? `#${stats.bestFinish}` : "—"}
+            />
+            <MiniStat
+              label="Winnings"
+              value={formatCurrency(stats.winnings, stats.currency ?? "")}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -296,10 +482,12 @@ function PreGame({
   tournament,
   me,
   seat,
+  stats,
 }: {
   tournament: Tournament;
   me: Player;
   seat?: { table: number; seat: number };
+  stats: ProfileStats | null;
 }) {
   return (
     <div className="space-y-4">
@@ -318,6 +506,7 @@ function PreGame({
           )}
         </CardContent>
       </Card>
+      <CareerCard stats={stats} />
       <ChipReference startingChips={tournament.config.startingChips} />
       <p className="text-center text-sm text-muted-foreground">
         {tournament.players.length} checked in

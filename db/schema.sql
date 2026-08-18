@@ -21,6 +21,20 @@ create table if not exists tournaments (
   created_at          timestamptz not null default now()
 );
 
+-- A person across poker nights. Check-in finds-or-creates by normalized name, so a
+-- phone that lost its token re-attaches by typing the same name — consistent with
+-- the home-game trust model: the token prevents accidents, not attacks.
+create table if not exists profiles (
+  id            uuid primary key default gen_random_uuid(),
+  first_name    text not null,
+  last_name     text not null,
+  profile_token uuid not null default gen_random_uuid(),
+  created_at    timestamptz not null default now()
+);
+
+create unique index if not exists profiles_name_idx
+  on profiles (lower(first_name), lower(last_name));
+
 create table if not exists players (
   id                    uuid primary key default gen_random_uuid(),
   tournament_id         uuid not null references tournaments(id) on delete cascade,
@@ -35,6 +49,10 @@ create table if not exists players (
   checked_in_at         timestamptz not null default now(),
   unique (tournament_id, name)
 );
+
+alter table players add column if not exists
+  profile_id uuid references profiles(id) on delete set null;
+create index if not exists players_profile_idx on players(profile_id);
 
 create table if not exists tables (
   tournament_id     uuid not null references tournaments(id) on delete cascade,

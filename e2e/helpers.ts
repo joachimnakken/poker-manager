@@ -31,11 +31,17 @@ export async function createTournament(page: Page, name: string): Promise<string
   return code;
 }
 
-export async function addPlayer(page: Page, name: string): Promise<void> {
+/** The fixtures share one last name: profiles need two names, specs only vary the first. */
+export function fullName(firstName: string): string {
+  return `${firstName} Test`;
+}
+
+export async function addPlayer(page: Page, firstName: string): Promise<void> {
   await page.getByRole("button", { name: "+ Add Player" }).click();
-  await page.getByLabel("Player Name").fill(name);
+  await page.getByLabel("First Name").fill(firstName);
+  await page.getByLabel("Last Name").fill("Test");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.locator(`[data-player-row="${name}"]`).first()).toBeVisible();
+  await expect(page.locator(`[data-player-row="${fullName(firstName)}"]`).first()).toBeVisible();
 }
 
 export async function setSeatsPerTable(page: Page, code: string, seats: number): Promise<void> {
@@ -47,13 +53,23 @@ export async function setSeatsPerTable(page: Page, code: string, seats: number):
   await page.goto(`/tournament/${code}`);
 }
 
-/** Checks a phone in by name and waits for its own view to appear. */
-export async function checkIn(page: Page, code: string, name: string): Promise<void> {
+/** Checks a phone in by first name (last name is the shared fixture one) and waits for its own view. */
+export async function checkIn(page: Page, code: string, firstName: string): Promise<void> {
   await page.goto(`/t/${code}`);
-  await page.getByPlaceholder("Your name").fill(name);
+  await page.getByPlaceholder("First name").fill(firstName);
+  await page.getByPlaceholder("Last name").fill("Test");
   await page.getByRole("button", { name: "I'm in" }).click();
+  // Fixture names sit one edit apart (Cap1/Cap2), which rightly trips the did-you-mean
+  // prompt — every fixture player is a new person, so answer "I'm new" when asked.
+  const newProfile = page.getByTestId("checkin-new-profile");
+  await expect(page.getByText("Checked in as").or(newProfile).first()).toBeVisible({
+    timeout: 10_000,
+  });
+  if (await newProfile.isVisible()) {
+    await newProfile.click();
+  }
   await expect(page.getByText("Checked in as")).toBeVisible();
-  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect(page.getByText(fullName(firstName), { exact: true })).toBeVisible();
 }
 
 /** Reads state straight from the API — used to set up deterministic seating. */

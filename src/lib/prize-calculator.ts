@@ -1,6 +1,10 @@
 import { Player, TournamentConfig } from "./types";
 import { PAYOUT_STRUCTURES } from "./constants";
 
+/** The pot only depends on these fields, so career stats can replay old tournaments
+ * from bare DB rows without materializing full Player objects. */
+export type PotEntry = Pick<Player, "rebuys" | "hasAddon">;
+
 export function getPayoutPercentages(playerCount: number): number[] {
   if (playerCount <= 1) return [100];
   if (playerCount === 2) return PAYOUT_STRUCTURES["2"];
@@ -10,7 +14,7 @@ export function getPayoutPercentages(playerCount: number): number[] {
   return PAYOUT_STRUCTURES["11-15"];
 }
 
-export function calculateTotalPot(players: Player[], config: TournamentConfig): number {
+export function calculateTotalPot(players: PotEntry[], config: TournamentConfig): number {
   const buyIns = players.length * config.buyIn;
   const rebuys = players.reduce((sum, p) => sum + p.rebuys, 0) * config.rebuyAmount;
   const addons = players.filter((p) => p.hasAddon).length * config.addonAmount;
@@ -18,7 +22,7 @@ export function calculateTotalPot(players: Player[], config: TournamentConfig): 
 }
 
 export function calculatePayouts(
-  players: Player[],
+  players: PotEntry[],
   config: TournamentConfig
 ): { position: number; amount: number; percentage: number }[] {
   const totalPot = calculateTotalPot(players, config);

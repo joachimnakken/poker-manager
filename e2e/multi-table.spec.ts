@@ -7,6 +7,7 @@ import {
   createTournament,
   deleteTournament,
   freeSeatAt,
+  fullName,
   openDevice,
   rawAction,
   readState,
@@ -29,7 +30,9 @@ async function seatsAndPlayers(page: Page, code: string) {
   const state = await readState(page, code);
   const players = state.tournament.players as StatePlayer[];
   const seats = (state.tournament.seatAssignments ?? []) as Seat[];
-  const idOf = (name: string) => players.find((p) => p.name === name)!.id;
+  // Player names are stored as "First Last"; specs pass either form.
+  const idOf = (name: string) =>
+    (players.find((p) => p.name === name) ?? players.find((p) => p.name === fullName(name)))!.id;
   const seatOf = (name: string) => seats.find((s) => s.playerId === idOf(name))!;
   return { state, players, seats, idOf, seatOf };
 }
@@ -125,7 +128,7 @@ test("a captain's knockout reaches all four devices, and positions stay one sequ
 
   const { players, seats, idOf } = await seatsAndPlayers(host.page, code);
   const victim = players.find(
-    (p) => p.name !== "Cap1" && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
+    (p) => p.name !== fullName("Cap1") && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
   )!;
 
   // Recorded on captain 1's phone, through the UI, at their own table.
@@ -233,7 +236,7 @@ test("a move applies only after the second captain confirms", async ({ browser }
 
   const { players, seats, idOf, seatOf } = await seatsAndPlayers(host.page, code);
   const mover = players.find(
-    (p) => p.name !== "Cap1" && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
+    (p) => p.name !== fullName("Cap1") && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
   )!;
   const taken = new Set(seats.filter((s) => s.table === cap2Table).map((s) => s.seat));
   const freeSeat = freeSeatAt((seat) => !taken.has(seat))!;
@@ -305,7 +308,7 @@ test("a move into an unclaimed table completes on the host's single confirm", as
 
   const { players, seats, seatOf } = await seatsAndPlayers(host.page, code);
   const mover = players.find(
-    (p) => p.name !== "Cap1" && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
+    (p) => p.name !== fullName("Cap1") && seats.find((s) => s.playerId === p.id)?.table === cap1Table,
   )!;
   const taken = new Set(seats.filter((s) => s.table === cap2Table).map((s) => s.seat));
   const freeSeat = freeSeatAt((seat) => !taken.has(seat))!;
@@ -381,7 +384,9 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await noOverflow();
 
   // ...and the name floats onto the projector within a poll.
-  await expect(projector.page.getByText("Solo", { exact: true })).toBeVisible({ timeout: 5000 });
+  await expect(projector.page.getByText(fullName("Solo"), { exact: true })).toBeVisible({
+    timeout: 5000,
+  });
   await expect(projector.page.getByText(/1 checked in/)).toBeVisible();
 
   // setup, seat drawn
@@ -417,6 +422,21 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await noOverflow();
   await expect(phone.page.getByText("Final standings")).toBeVisible();
   await noOverflow();
+
+  // The finished night flows into career stats: Pair took it down, so their profile
+  // shows at least one win. Asserted before the delete, which would erase the night.
+  const stats = await phone.page.evaluate(async () => {
+    const response = await fetch("/api/stats", { cache: "no-store" });
+    return response.json() as Promise<{
+      leaderboard: { firstName: string; lastName: string; wins: number; nights: number }[];
+    }>;
+  });
+  const winner = stats.leaderboard.find(
+    (entry) => `${entry.firstName} ${entry.lastName}` === fullName("Pair"),
+  );
+  expect(winner, "winner has a profile on the leaderboard").toBeTruthy();
+  expect(winner!.wins).toBeGreaterThanOrEqual(1);
+  expect(winner!.nights).toBeGreaterThanOrEqual(1);
 
   await deleteTournament(host.page, code);
 });

@@ -15,14 +15,16 @@ import { useTournamentStore } from "@/store/tournament-store";
 
 export function PlayerAddDialog({ tournamentId }: { tournamentId: string }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const addPlayer = useTournamentStore((s) => s.addPlayer);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
-    addPlayer(tournamentId, name.trim());
-    setName("");
+    if (!firstName.trim() || !lastName.trim()) return;
+    addPlayer(tournamentId, firstName.trim(), lastName.trim());
+    setFirstName("");
+    setLastName("");
     setOpen(false);
   }
 
@@ -39,13 +41,22 @@ export function PlayerAddDialog({ tournamentId }: { tournamentId: string }) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="playerName">Player Name</Label>
+            <Label htmlFor="playerFirstName">First Name</Label>
             <Input
-              id="playerName"
-              placeholder="Enter name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              id="playerFirstName"
+              placeholder="First name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
               autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="playerLastName">Last Name</Label>
+            <Input
+              id="playerLastName"
+              placeholder="Last name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
             />
           </div>
           <Button type="submit" className="w-full">

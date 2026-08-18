@@ -1,17 +1,25 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/server/db";
 import { loadTournament, resolveTournament } from "@/lib/server/tournaments";
+import { findOrCreateProfile, profileByToken, statsForProfile } from "@/lib/server/profiles";
+import type { CheckinRequest } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const body = (await request.json()) as { name?: string };
-  const name = body.name?.trim();
+  const body = (await request.json()) as Partial<CheckinRequest>;
+  const firstName = body.firstName?.trim();
+  const lastName = body.lastName?.trim();
 
-  if (!name) {
-    return NextResponse.json({ error: "Name required" }, { status: 400 });
+  // A stored token wins; a phone that lost it (or was never here) falls back to the
+  // name, which finds-or-creates the same profile. Both paths need the names anyway,
+  // so a stale token degrades silently instead of erroring.
+  const byToken = body.profileToken ? await profileByToken(body.profileToken) : null;
+  if (!byToken && (!firstName || !lastName)) {
+    return NextResponse.json({ error: "First and last name required" }, { status: 400 });
   }
+  const profile = byToken ?? (await findOrCreateProfile(firstName!, lastName!));
 
   const tournament = await resolveTournament(code);
   if (!tournament) {
@@ -21,18 +29,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
     return NextResponse.json({ error: "Check-in has closed" }, { status: 409 });
   }
 
-  // A phone that refreshes and re-checks-in under the same name gets its own player
-  // back rather than a duplicate — the name is the identity at a home game.
+  // Re-checking in under the same name returns the same player rather than a duplicate.
+  // The conflict update also backfills profile_id onto players the host added by hand.
+  const name = `${profile.firstName} ${profile.lastName}`;
   const [player] = await query<{ id: string; player_token: string }>(
-    `insert into players (tournament_id, name) values ($1, $2)
-     on conflict (tournament_id, name) do update set name = excluded.name
+    `insert into players (tournament_id, name, profile_id) values ($1, $2, $3)
+     on conflict (tournament_id, name) do update set profile_id = excluded.profile_id
      returning id, player_token`,
-    [tournament.id, name],
+    [tournament.id, name, profile.id],
   );
 
   return NextResponse.json({
     playerId: player.id,
     playerToken: player.player_token,
+    profileToken: profile.profileToken,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    stats: await statsForProfile(profile.id),
     tournament: await loadTournament(code),
     serverNow: new Date().toISOString(),
   });
