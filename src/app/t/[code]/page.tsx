@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentSync } from "@/store/use-sync";
 import { useClockTick } from "@/store/use-timer";
@@ -177,6 +178,17 @@ function Shell({
         )}
       </div>
       {children}
+      <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
+        <Link href="/rankings" className="underline">
+          Hand rankings
+        </Link>
+        <Link href="/showdown" className="underline">
+          Settle a showdown
+        </Link>
+        <Link href="/stats" className="underline">
+          Career stats
+        </Link>
+      </div>
     </div>
   );
 }
