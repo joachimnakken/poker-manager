@@ -9,6 +9,7 @@ import { CreateTournamentForm } from "@/components/tournament/create-tournament-
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentListSync } from "@/store/use-sync";
 import { ownedCodes } from "@/lib/identity";
+import { InstallGate } from "@/components/install-gate";
 
 export default function HomePage() {
   useTournamentListSync();
@@ -26,6 +27,7 @@ export default function HomePage() {
   }, [tournaments]);
 
   return (
+    <InstallGate>
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-2xl mx-auto space-y-8">
         <div className="text-center space-y-2">
@@ -90,5 +92,6 @@ export default function HomePage() {
         )}
       </div>
     </div>
+    </InstallGate>
   );
 }
