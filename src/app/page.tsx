@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { CreateTournamentForm } from "@/components/tournament/create-tournament-form";
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentListSync } from "@/store/use-sync";
-import { LegacyLocalGames } from "@/components/tournament/legacy-local-games";
 import { ownedCodes } from "@/lib/identity";
 
 export default function HomePage() {
@@ -100,8 +99,6 @@ export default function HomePage() {
             </CardContent>
           </Card>
         )}
-
-        <LegacyLocalGames />
       </div>
     </div>
   );

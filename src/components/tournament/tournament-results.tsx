@@ -32,7 +32,7 @@ export function TournamentResults({ tournamentId }: { tournamentId: string }) {
  * The presentation on its own, so legacy localStorage games — which have no server
  * record and so no store entry — can render the same standings read-only.
  */
-export function ResultsView({
+function ResultsView({
   players,
   config,
   onPlayAgain,
