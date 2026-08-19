@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Player, Tournament } from "@/lib/types";
 import { PlayerNav } from "@/components/player-nav";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 
 const LAYOUT_KEY = "poker-phone-layout";
 type Layout = "companion" | "clock";
@@ -89,14 +90,26 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
 
   if (layout === "clock") {
     return (
-      <Shell code={code} layout={layout} onLayout={chooseLayout} name={tournament.config.name}>
+      <Shell
+      code={code}
+      layout={layout}
+      onLayout={chooseLayout}
+      name={tournament.config.name}
+      isHost={isHost}
+    >
         <StandaloneClock tournament={tournament} />
       </Shell>
     );
   }
 
   return (
-    <Shell code={code} layout={layout} onLayout={chooseLayout} name={tournament.config.name}>
+    <Shell
+      code={code}
+      layout={layout}
+      onLayout={chooseLayout}
+      name={tournament.config.name}
+      isHost={isHost}
+    >
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {!me ? (
@@ -145,19 +158,31 @@ function Shell({
   name,
   layout,
   onLayout,
+  isHost,
   children,
 }: {
   code: string;
   name?: string;
   layout?: Layout;
   onLayout?: (next: Layout) => void;
+  isHost?: boolean;
   children: React.ReactNode;
 }) {
+  const loadOne = useTournamentStore((s) => s.loadOne);
+
   return (
-    <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4 overflow-x-hidden">
+    <PullToRefresh onRefresh={() => loadOne(code)}>
+      <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4 overflow-x-hidden">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-lg font-bold truncate">{name ?? "Poker"}</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-bold truncate">{name ?? "Poker"}</h1>
+            {isHost && (
+              <Badge variant="default" className="shrink-0 text-[10px]" data-testid="host-badge">
+                HOST
+              </Badge>
+            )}
+          </div>
           <span className="text-xs font-mono text-muted-foreground tracking-widest">{code}</span>
         </div>
         {layout && onLayout && (
@@ -185,7 +210,8 @@ function Shell({
       </div>
       {children}
       <PlayerNav className="pt-2" />
-    </div>
+      </div>
+    </PullToRefresh>
   );
 }
 
