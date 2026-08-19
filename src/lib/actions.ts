@@ -26,4 +26,6 @@ export type Action =
   | { type: "update-config"; config: Partial<TournamentConfig>; seatsPerTable?: number }
   | { type: "assign-captain"; tableNumber: number; playerId: string | null }
   /** Which player the host is sitting as. Their token then carries owner authority. */
-  | { type: "set-host-player"; playerId: string | null };
+  | { type: "set-host-player"; playerId: string | null }
+  /** Shout it to the room: this player is all in. */
+  | { type: "announce-all-in"; playerId: string };

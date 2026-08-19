@@ -94,6 +94,21 @@ create table if not exists knockouts (
   created_at    timestamptz not null default now()
 );
 
+-- Table-side shouts, for the room rather than the record: "he's all in". Append-only
+-- with an id, so each device flashes only what is newer than the last one it showed --
+-- a phone waking from a pocket must not replay a minute of them. Eliminations are not
+-- in here; `knockouts` already carries an id and a timestamp and does the same job.
+create table if not exists announcements (
+  id            bigserial primary key,
+  tournament_id uuid not null references tournaments(id) on delete cascade,
+  player_id     uuid not null references players(id) on delete cascade,
+  kind          text not null check (kind in ('all-in')),
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists announcements_recent_idx
+  on announcements (tournament_id, id desc);
+
 create table if not exists proposals (
   id                uuid primary key default gen_random_uuid(),
   tournament_id     uuid not null references tournaments(id) on delete cascade,

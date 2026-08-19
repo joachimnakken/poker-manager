@@ -787,6 +787,23 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
       return;
     }
 
+    case "announce-all-in": {
+      await requireAuthorityOver(actor, context, action.playerId);
+      // A double tap should not flash twice; the same player being all in again inside
+      // a few seconds is the same moment as far as the room is concerned.
+      await query(
+        `insert into announcements (tournament_id, player_id, kind)
+         select $1, $2, 'all-in'
+         where not exists (
+           select 1 from announcements
+           where tournament_id = $1 and player_id = $2 and kind = 'all-in'
+             and created_at > now() - interval '8 seconds'
+         )`,
+        [id, action.playerId],
+      );
+      return;
+    }
+
     case "set-host-player": {
       requireOwner(actor);
       await serializable(async (client) => {

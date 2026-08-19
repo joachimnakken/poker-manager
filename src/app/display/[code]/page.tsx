@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
 import { assignCards } from "@/lib/name-cards";
 import { BouncingCards } from "@/components/bouncing-cards";
+import { AnnouncementFlash } from "@/components/announcement-flash";
 import type { Tournament } from "@/lib/types";
 
 /**
@@ -86,6 +87,7 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
 
   return (
     <div className={cn("min-h-screen text-white p-8 flex flex-col gap-8", theme.pageBg)}>
+      <AnnouncementFlash announcements={tournament.announcements} size="wall" />
       <div className="flex items-baseline justify-between">
         <h1 className="text-5xl font-bold">{config.name}</h1>
         <span className={cn("text-3xl uppercase tracking-widest", theme.statusLabel)}>

@@ -18,11 +18,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Player, Tournament } from "@/lib/types";
+import type { Announcement, Player, Tournament } from "@/lib/types";
 import { PlayerNav } from "@/components/player-nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { SelfieCapture } from "@/components/selfie-capture";
 import { Avatar } from "@/components/avatar";
+import { AnnouncementFlash } from "@/components/announcement-flash";
 
 const LAYOUT_KEY = "poker-phone-layout";
 type Layout = "companion" | "clock";
@@ -99,6 +100,7 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
       onLayout={chooseLayout}
       name={tournament.config.name}
       isHost={isHost}
+      announcements={tournament.announcements}
     >
         <StandaloneClock tournament={tournament} />
       </Shell>
@@ -112,6 +114,7 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
       onLayout={chooseLayout}
       name={tournament.config.name}
       isHost={isHost}
+      announcements={tournament.announcements}
     >
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -181,6 +184,7 @@ function Shell({
   layout,
   onLayout,
   isHost,
+  announcements,
   children,
 }: {
   code: string;
@@ -188,6 +192,7 @@ function Shell({
   layout?: Layout;
   onLayout?: (next: Layout) => void;
   isHost?: boolean;
+  announcements?: Announcement[];
   children: React.ReactNode;
 }) {
   const loadOne = useTournamentStore((s) => s.loadOne);
@@ -232,6 +237,7 @@ function Shell({
       </div>
       {children}
       <PlayerNav className="pt-2" />
+      {announcements && <AnnouncementFlash announcements={announcements} />}
       </div>
     </PullToRefresh>
   );
@@ -731,6 +737,7 @@ function InPlay({
   const knockoutPlayer = useTournamentStore((s) => s.knockoutPlayer);
   const registerRebuy = useTournamentStore((s) => s.registerRebuy);
   const registerAddon = useTournamentStore((s) => s.registerAddon);
+  const announceAllIn = useTournamentStore((s) => s.announceAllIn);
   const [koTarget, setKoTarget] = useState<string | null>(null);
 
   const captainId =
@@ -830,6 +837,15 @@ function InPlay({
                 </span>
               ) : (
                 <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[10px]"
+                    data-testid={`allin-${player.name}`}
+                    onClick={() => announceAllIn(code, player.id)}
+                  >
+                    ALL IN
+                  </Button>
                   <Button
                     size="sm"
                     variant="destructive"

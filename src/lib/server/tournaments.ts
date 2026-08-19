@@ -1,6 +1,7 @@
 import { query } from "./db";
 import { readClock } from "../clock";
 import type {
+  Announcement,
   ClockAnchor,
   Player,
   Proposal,
@@ -57,8 +58,18 @@ interface SeatRow {
 }
 
 interface KnockoutRow {
+  id: string;
   tournament_id: string;
   player_id: string;
+  created_at: Date;
+}
+
+interface AnnouncementRow {
+  id: string;
+  tournament_id: string;
+  player_id: string;
+  kind: "all-in";
+  created_at: Date;
 }
 
 interface ProposalRow {
@@ -134,6 +145,7 @@ function assemble(
   seats: SeatRow[],
   knockouts: KnockoutRow[],
   proposals: ProposalRow[],
+  announcements: AnnouncementRow[],
 ): Tournament {
   const config: TournamentConfig = {
     ...row.config,
@@ -160,6 +172,31 @@ function assemble(
     captainPlayerId: table.captain_player_id ?? undefined,
   }));
 
+  const named = new Map(players.map((player) => [player.id, player]));
+  const RECENT_MS = 30_000;
+  const now = Date.now();
+  // Two sources, one stream: the client then needs a single watermark rather than
+  // reconciling shouts against the knockout log itself.
+  const recent: Announcement[] = [
+    ...announcements.map((row) => ({
+      id: `a:${row.id}`,
+      kind: "all-in" as const,
+      playerId: row.player_id,
+      playerName: named.get(row.player_id)?.name ?? "Someone",
+      at: row.created_at.toISOString(),
+    })),
+    ...knockouts
+      .filter((row) => now - row.created_at.getTime() < RECENT_MS)
+      .map((row) => ({
+        id: `k:${row.id}`,
+        kind: "eliminated" as const,
+        playerId: row.player_id,
+        playerName: named.get(row.player_id)?.name ?? "Someone",
+        at: row.created_at.toISOString(),
+        finishPosition: named.get(row.player_id)?.finish_position ?? undefined,
+      })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+
   // The clock reading here is a server-side snapshot so a first paint is correct;
   // every client recomputes it from `anchor` against its own serverNow offset.
   const reading = readClock(anchor, config.blindStructure);
@@ -180,6 +217,7 @@ function assemble(
     seatsPerTable: row.seats_per_table,
     hostPlayerId: row.host_player_id ?? undefined,
     tables: tableInfo,
+    announcements: recent,
     proposals: proposals.map(toProposal),
   };
 }
@@ -190,7 +228,7 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
   }
   const ids = rows.map((row) => row.id);
 
-  const [players, tables, seats, knockouts, proposals] = await Promise.all([
+  const [players, tables, seats, knockouts, announcements, proposals] = await Promise.all([
     query<PlayerRow>(
       `select id, tournament_id, name, profile_id, rebuys, has_addon, is_active, finish_position,
               knocked_out_in_level, knocked_out_by
@@ -208,7 +246,14 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
       [ids],
     ),
     query<KnockoutRow>(
-      `select tournament_id, player_id from knockouts where tournament_id = any($1) order by id`,
+      `select id, tournament_id, player_id, created_at from knockouts
+       where tournament_id = any($1) order by id`,
+      [ids],
+    ),
+    query<AnnouncementRow>(
+      `select id, tournament_id, player_id, kind, created_at from announcements
+       where tournament_id = any($1) and created_at > now() - interval '30 seconds'
+       order by id`,
       [ids],
     ),
     query<ProposalRow>(
@@ -228,6 +273,7 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
   const seatsBy = groupBy(seats, (row) => row.tournament_id);
   const knockoutsBy = groupBy(knockouts, (row) => row.tournament_id);
   const proposalsBy = groupBy(proposals, (row) => row.tournament_id);
+  const announcementsBy = groupBy(announcements, (row) => row.tournament_id);
 
   return rows.map((row) =>
     assemble(
@@ -237,6 +283,7 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
       seatsBy.get(row.id) ?? [],
       knockoutsBy.get(row.id) ?? [],
       proposalsBy.get(row.id) ?? [],
+      announcementsBy.get(row.id) ?? [],
     ),
   );
 }

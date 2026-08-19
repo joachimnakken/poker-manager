@@ -71,6 +71,22 @@ export interface Proposal {
   declineReason?: string;
 }
 
+/**
+ * A shout for the room: someone is all in, someone just went out. Ephemeral by design —
+ * only the last few seconds are sent, and each client flashes an id once.
+ */
+export interface Announcement {
+  /** Stable and unique across both sources, e.g. "a:12" or "k:34". */
+  id: string;
+  kind: "all-in" | "eliminated";
+  playerId: string;
+  playerName: string;
+  /** ISO timestamp, for ordering and for judging freshness. */
+  at: string;
+  /** Finishing place, on eliminations. */
+  finishPosition?: number;
+}
+
 /** The clock anchor as stored on the server. `secondsRemaining` is never persisted. */
 export interface ClockAnchor {
   currentLevelIndex: number;
@@ -97,4 +113,6 @@ export interface Tournament {
   hostPlayerId?: string;
   tables: TableInfo[];
   proposals: Proposal[];
+  /** The last few seconds' worth only; clients flash what they have not seen. */
+  announcements: Announcement[];
 }
