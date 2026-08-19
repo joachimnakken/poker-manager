@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { CreateTournamentForm } from "@/components/tournament/create-tournament-
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentListSync } from "@/store/use-sync";
 import { LegacyLocalGames } from "@/components/tournament/legacy-local-games";
+import { ownedCodes } from "@/lib/identity";
 
 export default function HomePage() {
   useTournamentListSync();
@@ -16,6 +18,13 @@ export default function HomePage() {
   const tournamentList = Object.values(tournaments).sort(
     (a, b) => b.config.date.localeCompare(a.config.date)
   );
+
+  // A tournament this device created opens its host dashboard; anyone else's opens
+  // the phone view, so a wandering player can't land among the host controls.
+  const [owned, setOwned] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setOwned(ownedCodes());
+  }, [tournaments]);
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -54,7 +63,7 @@ export default function HomePage() {
                   className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
                 >
                   <Link
-                    href={`/tournament/${t.config.id}`}
+                    href={owned.has(t.code) ? `/tournament/${t.config.id}` : `/t/${t.code}`}
                     className="flex-1 min-w-0"
                   >
                     <div className="font-medium truncate">{t.config.name}</div>
@@ -75,14 +84,16 @@ export default function HomePage() {
                     >
                       {t.status}
                     </Badge>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteTournament(t.config.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      Delete
-                    </Button>
+                    {owned.has(t.code) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteTournament(t.config.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

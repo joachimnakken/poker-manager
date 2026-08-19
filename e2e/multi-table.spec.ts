@@ -383,6 +383,11 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await expect(phone.page.getByText("Waiting for the host to draw seats…")).toBeVisible();
   await noOverflow();
 
+  // A player who wanders into the host dashboard is bounced back to the phone view.
+  await phone.page.goto(`/tournament/${code}`);
+  await phone.page.waitForURL(`**/t/${code}`);
+  await expect(phone.page.getByText("Checked in as")).toBeVisible();
+
   // ...and the name floats onto the projector within a poll.
   await expect(projector.page.getByText(fullName("Solo"), { exact: true })).toBeVisible({
     timeout: 5000,

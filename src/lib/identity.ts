@@ -46,6 +46,15 @@ export function tokenFor(code: string): string | undefined {
   return identity.ownerToken ?? identity.playerToken;
 }
 
+/** The tournament codes this device created — the ones whose host pages it may open. */
+export function ownedCodes(): Set<string> {
+  return new Set(
+    Object.entries(readAll())
+      .filter(([, identity]) => identity.ownerToken)
+      .map(([code]) => code),
+  );
+}
+
 /**
  * The device's owner across tournaments — set after any successful check-in, so the
  * next poker night opens with a one-tap "Join as X". The names ride along because the

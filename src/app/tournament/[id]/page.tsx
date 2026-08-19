@@ -6,6 +6,7 @@ import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentSync } from "@/store/use-sync";
 import { useTimer } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
+import { useHostGuard } from "@/hooks/use-host-guard";
 import { BlindTimer } from "@/components/tournament/blind-timer";
 import { StatsBar } from "@/components/tournament/stats-bar";
 import { PlayerTable } from "@/components/tournament/player-table";
@@ -22,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 export default function TournamentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const isHost = useHostGuard(id);
   const tournament = useTournamentStore((s) => s.tournaments[id]);
   const loaded = useTournamentStore((s) => s.loaded);
 
@@ -49,12 +51,12 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [tournament?.timer.isRunning, tournament?.status, id, pauseTournament, resumeTournament]);
 
-  if (!tournament) {
+  if (!isHost || !tournament) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <p className="text-muted-foreground">
-            {loaded ? "Tournament not found" : "Loading…"}
+            {isHost && loaded ? "Tournament not found" : "Loading…"}
           </p>
           <button onClick={() => router.push("/")} className="text-primary underline">
             Go Home

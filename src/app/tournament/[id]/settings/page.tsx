@@ -11,10 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { BlindLevel, TournamentConfig } from "@/lib/types";
 import { DEFAULT_BLIND_STRUCTURE } from "@/lib/constants";
+import { useHostGuard } from "@/hooks/use-host-guard";
 
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   useTournamentSync(id);
+  const isHost = useHostGuard(id);
 
   const tournament = useTournamentStore((s) => s.tournaments[id]);
   const loaded = useTournamentStore((s) => s.loaded);
@@ -34,10 +36,12 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
     }
   }, [tournament]);
 
-  if (!tournament || !draft) {
+  if (!isHost || !tournament || !draft) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">{loaded ? "Tournament not found" : "Loading…"}</p>
+        <p className="text-muted-foreground">
+          {isHost && loaded ? "Tournament not found" : "Loading…"}
+        </p>
       </div>
     );
   }
