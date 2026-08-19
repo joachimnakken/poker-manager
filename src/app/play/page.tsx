@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { clearLastJoined, getLastJoined, setLastJoined } from "@/lib/identity";
 import type { StateResponse } from "@/lib/api";
 import { QrScanner } from "@/components/qr-scanner";
 import { InstallPrompt } from "@/components/install-prompt";
+import { PlayerNav } from "@/components/player-nav";
 
 /**
  * Where the installed app opens. A player belongs to one tournament at a time, so this
@@ -68,7 +68,7 @@ export default function PlayPage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-md mx-auto space-y-4">
+    <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
       <div className="text-center space-y-1">
         <h1 className="text-2xl font-bold">Join a table</h1>
         <p className="text-sm text-muted-foreground">
@@ -79,17 +79,7 @@ export default function PlayPage() {
       <QrScanner onJoin={join} />
       <InstallPrompt />
 
-      <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
-        <Link href="/rankings" className="underline">
-          Hand rankings
-        </Link>
-        <Link href="/showdown" className="underline">
-          Settle a showdown
-        </Link>
-        <Link href="/stats" className="underline">
-          Career stats
-        </Link>
-      </div>
+      <PlayerNav className="pt-2" />
     </div>
   );
 }

@@ -69,7 +69,8 @@ export async function checkIn(page: Page, code: string, firstName: string): Prom
     await newProfile.click();
   }
   await expect(page.getByText("Checked in as")).toBeVisible();
-  await expect(page.getByText(fullName(firstName), { exact: true })).toBeVisible();
+  // Target the identity card: the name also appears in the field list below it.
+  await expect(page.getByTestId("my-name")).toHaveText(fullName(firstName));
 }
 
 /** Reads state straight from the API — used to set up deterministic seating. */

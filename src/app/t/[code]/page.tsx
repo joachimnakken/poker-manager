@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentSync } from "@/store/use-sync";
 import { useClockTick } from "@/store/use-timer";
@@ -19,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Player, Tournament } from "@/lib/types";
+import { PlayerNav } from "@/components/player-nav";
 
 const LAYOUT_KEY = "poker-phone-layout";
 type Layout = "companion" | "clock";
@@ -148,7 +148,7 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen px-4 py-5 max-w-md mx-auto space-y-4 overflow-x-hidden">
+    <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4 overflow-x-hidden">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="text-lg font-bold truncate">{name ?? "Poker"}</h1>
@@ -178,17 +178,7 @@ function Shell({
         )}
       </div>
       {children}
-      <div className="flex justify-center gap-4 pt-2 text-xs text-muted-foreground">
-        <Link href="/rankings" className="underline">
-          Hand rankings
-        </Link>
-        <Link href="/showdown" className="underline">
-          Settle a showdown
-        </Link>
-        <Link href="/stats" className="underline">
-          Career stats
-        </Link>
-      </div>
+      <PlayerNav className="pt-2" />
     </div>
   );
 }
@@ -506,7 +496,9 @@ function PreGame({
       <Card>
         <CardContent className="pt-5 text-center space-y-1">
           <div className="text-sm text-muted-foreground">Checked in as</div>
-          <div className="text-2xl font-bold">{me.name}</div>
+          <div className="text-2xl font-bold" data-testid="my-name">
+            {me.name}
+          </div>
           {seat ? (
             <div className="text-lg" data-testid="my-seat">
               Table {seat.table} &middot; Seat {seat.seat}
@@ -518,12 +510,99 @@ function PreGame({
           )}
         </CardContent>
       </Card>
+      <PlayerList tournament={tournament} meId={me.id} title="Checked in" />
       <CareerCard stats={stats} />
       <ChipReference startingChips={tournament.config.startingChips} />
-      <p className="text-center text-sm text-muted-foreground">
-        {tournament.players.length} checked in
-      </p>
     </div>
+  );
+}
+
+/**
+ * Everyone in the tournament, whatever their state. Active players first, then the
+ * knocked-out in finishing order. Rebuys and add-ons show as badges because "did he
+ * already rebuy?" is the question that starts arguments at the table.
+ */
+function PlayerList({
+  tournament,
+  meId,
+  title,
+}: {
+  tournament: Tournament;
+  meId?: string;
+  title: string;
+}) {
+  const { players, seatAssignments } = tournament;
+  const seatOf = (playerId: string) => (seatAssignments ?? []).find((a) => a.playerId === playerId);
+  const active = players.filter((p) => p.isActive);
+  const sorted = [...players].sort((a, b) => {
+    if (a.isActive !== b.isActive) {
+      return a.isActive ? -1 : 1;
+    }
+    if (!a.isActive && !b.isActive) {
+      return (a.finishPosition ?? 999) - (b.finishPosition ?? 999);
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-base">{title}</CardTitle>
+        <span className="text-xs text-muted-foreground">
+          {active.length}/{players.length} left
+        </span>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {sorted.map((player) => {
+          const seat = seatOf(player.id);
+          return (
+            <div
+              key={player.id}
+              data-testid={`field-${player.name}`}
+              className={cn(
+                "flex items-center gap-2 rounded-md p-2",
+                player.id === meId ? "bg-primary/10" : "bg-muted/30",
+                !player.isActive && "opacity-60",
+              )}
+            >
+              <span
+                className={cn(
+                  "text-sm font-medium truncate flex-1",
+                  !player.isActive && "line-through",
+                )}
+              >
+                {player.name}
+              </span>
+
+              {player.rebuys > 0 && (
+                <Badge variant="outline" className="text-[10px] px-1.5">
+                  R{player.rebuys}
+                </Badge>
+              )}
+              {player.hasAddon && (
+                <Badge variant="outline" className="text-[10px] px-1.5">
+                  A
+                </Badge>
+              )}
+
+              {player.isActive ? (
+                seat ? (
+                  <span className="text-xs font-mono text-muted-foreground shrink-0">
+                    T{seat.table}&middot;S{seat.seat}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground shrink-0">no seat</span>
+                )
+              ) : (
+                <span className="text-xs font-mono text-muted-foreground shrink-0">
+                  #{player.finishPosition}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -756,6 +835,8 @@ function InPlay({
           </CardContent>
         </Card>
       )}
+
+      <PlayerList tournament={tournament} meId={me.id} title="Everyone" />
     </div>
   );
 }

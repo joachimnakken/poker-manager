@@ -26,7 +26,7 @@ export default function StatsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen px-4 py-6 max-w-2xl mx-auto space-y-4">
+    <div className="min-h-screen px-4 pt-safe pb-safe max-w-2xl mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Career stats</h1>
       </div>

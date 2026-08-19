@@ -129,6 +129,20 @@ body {
   background-attachment: fixed;
 }
 
+/*
+ * The viewport is viewport-fit=cover, which keeps the background gradient running edge
+ * to edge but also lays content out *underneath* the Dynamic Island and the home
+ * indicator. Anything that owns a screen has to step around them itself. env() is 0 on
+ * a device without them, so these collapse to the plain padding everywhere else.
+ */
+.pt-safe {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);
+}
+
+.pb-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

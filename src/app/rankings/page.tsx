@@ -8,7 +8,7 @@ export const metadata = { title: "Poker hand rankings" };
 /** The printed cheat sheet, retired: every hand, best to worst, with example cards. */
 export default function RankingsPage() {
   return (
-    <div className="min-h-screen px-4 py-6 max-w-md mx-auto space-y-4">
+    <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Hand rankings</h1>
       </div>
