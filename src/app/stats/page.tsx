@@ -46,35 +46,31 @@ export default function StatsPage() {
             <CardTitle className="text-base">All-time leaderboard</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="grid grid-cols-[2rem_1fr_repeat(5,3.5rem)] gap-1 px-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-              <span />
-              <span>Player</span>
-              <span className="text-right">Nights</span>
-              <span className="text-right">Wins</span>
-              <span className="text-right">KOs</span>
-              <span className="text-right">Best</span>
-              <span className="text-right">Won</span>
-            </div>
             {leaderboard.map((entry, index) => (
               <div
                 key={entry.profileId}
                 data-testid={`stats-row-${entry.firstName} ${entry.lastName}`}
                 className={cn(
-                  "grid grid-cols-[2rem_1fr_repeat(5,3.5rem)] gap-1 items-center rounded-md p-2 text-sm",
+                  "flex items-center gap-3 rounded-md p-3",
                   index === 0 && entry.wins > 0 ? "bg-primary/10" : "bg-muted/30",
                 )}
               >
-                <span className="font-mono text-xs text-muted-foreground">{index + 1}</span>
-                <span className="font-medium truncate">
-                  {entry.firstName} {entry.lastName}
+                <span className="w-5 shrink-0 font-mono text-xs text-muted-foreground">
+                  {index + 1}
                 </span>
-                <span className="text-right tabular-nums">{entry.nights}</span>
-                <span className="text-right tabular-nums">{entry.wins}</span>
-                <span className="text-right tabular-nums">{entry.knockouts}</span>
-                <span className="text-right tabular-nums">
-                  {entry.bestFinish !== null ? `#${entry.bestFinish}` : "—"}
-                </span>
-                <span className="text-right tabular-nums">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">
+                    {entry.firstName} {entry.lastName}
+                  </div>
+                  {/* A wrapping meta line rather than fixed columns: seven columns of
+                      numbers cannot fit a phone, and the name loses every time. */}
+                  <div className="text-xs text-muted-foreground">
+                    {entry.nights} {entry.nights === 1 ? "night" : "nights"} &middot;{" "}
+                    {entry.wins} {entry.wins === 1 ? "win" : "wins"} &middot; {entry.knockouts} KO
+                    {entry.bestFinish !== null && <> &middot; best #{entry.bestFinish}</>}
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-medium tabular-nums">
                   {formatCurrency(entry.winnings, entry.currency ?? "")}
                 </span>
               </div>

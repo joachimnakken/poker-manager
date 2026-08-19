@@ -75,10 +75,12 @@ export async function resolveActor(code: string, token: string | undefined): Pro
     id: string;
     table_number: number | null;
     captain_of: number | null;
+    is_host: boolean;
   }>(
     `select p.id,
             s.table_number,
-            t.table_number as captain_of
+            t.table_number as captain_of,
+            (tn.host_player_id = p.id) as is_host
      from players p
      join tournaments tn on tn.id = p.tournament_id
      left join seats s on s.player_id = p.id
@@ -89,8 +91,10 @@ export async function resolveActor(code: string, token: string | undefined): Pro
   if (!player) {
     return { isOwner: false, isCaptain: false };
   }
+  // The host plays too. Once the owner device has marked which player is them, that
+  // player's phone is a full host console — they run the night from their seat.
   return {
-    isOwner: false,
+    isOwner: player.is_host === true,
     playerId: player.id,
     tableNumber: player.table_number ?? undefined,
     isCaptain: player.captain_of !== null,
@@ -194,6 +198,22 @@ async function requireAuthorityOver(
   }
 }
 
+/**
+ * The host runs their own table, so they hold its captaincy. Called both when the host
+ * marks themselves and after every draw — a draw rebuilds the tables outright, so the
+ * captaincy has to be re-taken or marking yourself during setup silently loses it.
+ */
+async function seatHostAsCaptain(client: PoolClient, tournamentId: string): Promise<void> {
+  await client.query(
+    `update tables t
+     set captain_player_id = tn.host_player_id, captain_claimed_at = now()
+     from tournaments tn
+     join seats s on s.tournament_id = tn.id and s.player_id = tn.host_player_id
+     where tn.id = $1 and t.tournament_id = $1 and t.table_number = s.table_number`,
+    [tournamentId],
+  );
+}
+
 async function setSeats(
   tournamentId: string,
   seatsPerTable: number,
@@ -243,6 +263,8 @@ async function setSeats(
         [tournamentId, tableCount],
       );
     }
+
+    await seatHostAsCaptain(client, tournamentId);
   });
 }
 
@@ -765,35 +787,18 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
       return;
     }
 
-    case "claim-captaincy": {
-      if (actor.isOwner) {
-        throw new ActionError("The host is already the fallback captain everywhere", 400);
-      }
-      if (!actor.playerId || actor.tableNumber !== action.tableNumber) {
-        throw new ActionError("You are not seated at that table", 403);
-      }
-      const claimed = await query(
-        `update tables set captain_player_id = $3, captain_claimed_at = now()
-         where tournament_id = $1 and table_number = $2 and captain_player_id is null
-         returning table_number`,
-        [id, action.tableNumber, actor.playerId],
-      );
-      if (claimed.length === 0) {
-        throw new ActionError("That table already has a captain", 409);
-      }
-      return;
-    }
-
-    case "release-captaincy": {
-      if (!actor.isOwner && actor.tableNumber !== action.tableNumber) {
-        throw new ActionError("Not your table", 403);
-      }
-      await query(
-        `update tables set captain_player_id = null, captain_claimed_at = null
-         where tournament_id = $1 and table_number = $2
-           and ($3::uuid is null or captain_player_id = $3)`,
-        [id, action.tableNumber, actor.isOwner ? null : actor.playerId],
-      );
+    case "set-host-player": {
+      requireOwner(actor);
+      await serializable(async (client) => {
+        await client.query(`update tournaments set host_player_id = $2 where id = $1`, [
+          id,
+          action.playerId,
+        ]);
+        if (action.playerId === null) {
+          return;
+        }
+        await seatHostAsCaptain(client, id);
+      });
       return;
     }
 

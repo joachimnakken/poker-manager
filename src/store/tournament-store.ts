@@ -62,13 +62,12 @@ interface TournamentState {
   drawSeats: (tournamentId: string) => Promise<void>;
   clearSeats: (tournamentId: string) => Promise<void>;
 
-  claimCaptaincy: (tournamentId: string, tableNumber: number) => Promise<void>;
-  releaseCaptaincy: (tournamentId: string, tableNumber: number) => Promise<void>;
   assignCaptain: (
     tournamentId: string,
     tableNumber: number,
     playerId: string | null,
   ) => Promise<void>;
+  setHostPlayer: (tournamentId: string, playerId: string | null) => Promise<void>;
 
   movePlayer: (
     tournamentId: string,
@@ -286,12 +285,9 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
     drawSeats: (tournamentId) => act(tournamentId, { type: "draw-seats" }),
     clearSeats: (tournamentId) => act(tournamentId, { type: "clear-seats" }),
 
-    claimCaptaincy: (tournamentId, tableNumber) =>
-      act(tournamentId, { type: "claim-captaincy", tableNumber }),
-    releaseCaptaincy: (tournamentId, tableNumber) =>
-      act(tournamentId, { type: "release-captaincy", tableNumber }),
     assignCaptain: (tournamentId, tableNumber, playerId) =>
       act(tournamentId, { type: "assign-captain", tableNumber, playerId }),
+    setHostPlayer: (tournamentId, playerId) => act(tournamentId, { type: "set-host-player", playerId }),
 
     movePlayer: (tournamentId, playerId, toTable, toSeat) =>
       act(tournamentId, { type: "move-player", playerId, toTable, toSeat }),

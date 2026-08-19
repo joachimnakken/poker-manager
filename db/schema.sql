@@ -54,6 +54,12 @@ alter table players add column if not exists
   profile_id uuid references profiles(id) on delete set null;
 create index if not exists players_profile_idx on players(profile_id);
 
+-- Which player is the host. The host runs the night from their seat, so their player
+-- token carries owner authority; the owner_token device designates them. Declared after
+-- players because it points at one.
+alter table tournaments add column if not exists
+  host_player_id uuid references players(id) on delete set null;
+
 create table if not exists tables (
   tournament_id     uuid not null references tournaments(id) on delete cascade,
   table_number      int  not null,

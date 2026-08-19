@@ -91,17 +91,21 @@ async function setUpNight(browser: Parameters<typeof openDevice>[0], name: strin
 
   await splitAcrossTables(host.page, code, "Cap1", "Cap2");
 
-  const { seatOf } = await seatsAndPlayers(host.page, code);
+  const { seatOf, idOf } = await seatsAndPlayers(host.page, code);
   const cap1Table = seatOf("Cap1").table;
   const cap2Table = seatOf("Cap2").table;
 
-  // Both captains claim their own table from their own phone.
-  for (const [device, table] of [
-    [cap1, cap1Table],
-    [cap2, cap2Table],
+  // The host appoints both captains — captaincy is not self-claimed.
+  for (const [name, table] of [
+    ["Cap1", cap1Table],
+    ["Cap2", cap2Table],
   ] as const) {
-    const claimed = await rawAction(device.page, code, { type: "claim-captaincy", tableNumber: table });
-    expect(claimed.status).toBe(200);
+    const assigned = await rawAction(host.page, code, {
+      type: "assign-captain",
+      tableNumber: table,
+      playerId: idOf(name),
+    });
+    expect(assigned.status).toBe(200);
   }
 
   await host.page.getByRole("button", { name: "Start Tournament" }).click();
@@ -471,6 +475,53 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   expect(winner, "winner has a profile on the leaderboard").toBeTruthy();
   expect(winner!.wins).toBeGreaterThanOrEqual(1);
   expect(winner!.nights).toBeGreaterThanOrEqual(1);
+
+  await deleteTournament(host.page, code);
+});
+
+
+test("the host marks themselves, takes their table, and can then act anywhere", async ({
+  browser,
+}) => {
+  const night = await setUpNight(browser, "Host Player Night");
+  const { host, cap1, code, cap1Table, cap2Table } = night;
+
+  const { idOf, players, seats } = await seatsAndPlayers(host.page, code);
+
+  // Self-claiming is gone: a player cannot appoint themselves any more.
+  const selfClaim = await rawAction(cap1.page, code, {
+    type: "assign-captain",
+    tableNumber: cap1Table,
+    playerId: idOf("Cap1"),
+  });
+  expect(selfClaim.status, "assigning captains is the host's call").toBe(403);
+
+  // The host is sitting as Cap1, so marking that player hands their phone host powers.
+  const marked = await rawAction(host.page, code, {
+    type: "set-host-player",
+    playerId: idOf("Cap1"),
+  });
+  expect(marked.status).toBe(200);
+
+  await expect
+    .poll(async () => (await readState(host.page, code)).tournament.hostPlayerId)
+    .toBe(idOf("Cap1"));
+
+  // Marking yourself takes the captaincy of your own table with it.
+  const state = await readState(host.page, code);
+  const table = (state.tournament.tables as { tableNumber: number; captainPlayerId?: string }[])
+    .find((t) => t.tableNumber === cap1Table)!;
+  expect(table.captainPlayerId, "the host captains their own table").toBe(idOf("Cap1"));
+
+  // And that phone now reaches across tables, which a plain captain cannot.
+  const theirs = players.find(
+    (p) => seats.find((s) => s.playerId === p.id)?.table === cap2Table && p.isActive,
+  )!;
+  const crossTable = await rawAction(cap1.page, code, {
+    type: "knockout",
+    playerId: theirs.id,
+  });
+  expect(crossTable.status, "the host may act at any table").toBe(200);
 
   await deleteTournament(host.page, code);
 });

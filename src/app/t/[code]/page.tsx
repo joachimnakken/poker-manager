@@ -36,14 +36,14 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
 
   // Identity lives in this device's localStorage, so it can only be read after mount.
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [isHost, setIsHost] = useState(false);
+  const [hasOwnerToken, setHasOwnerToken] = useState(false);
   const [layout, setLayout] = useState<Layout>("companion");
   const [myStats, setMyStats] = useState<ProfileStats | null>(null);
 
   useEffect(() => {
     const identity = getIdentity(code);
     setPlayerId(identity.playerId ?? null);
-    setIsHost(Boolean(identity.ownerToken));
+    setHasOwnerToken(Boolean(identity.ownerToken));
     setLayout((window.localStorage.getItem(LAYOUT_KEY) as Layout) ?? "companion");
   }, [code]);
 
@@ -51,6 +51,11 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
     setLayout(next);
     window.localStorage.setItem(LAYOUT_KEY, next);
   }
+
+  // Host authority reaches this device either way: the owner token, or being the
+  // player the owner device marked as themselves.
+  const isHost =
+    hasOwnerToken || (playerId !== null && tournament?.hostPlayerId === playerId);
 
   const me = tournament?.players.find((p) => p.id === playerId);
   const myTable = tournament?.seatAssignments?.find((a) => a.playerId === playerId);
@@ -741,8 +746,6 @@ function InPlay({
   isHost: boolean;
 }) {
   const code = tournament.code;
-  const claimCaptaincy = useTournamentStore((s) => s.claimCaptaincy);
-  const releaseCaptaincy = useTournamentStore((s) => s.releaseCaptaincy);
   const knockoutPlayer = useTournamentStore((s) => s.knockoutPlayer);
   const registerRebuy = useTournamentStore((s) => s.registerRebuy);
   const registerAddon = useTournamentStore((s) => s.registerAddon);
@@ -804,26 +807,10 @@ function InPlay({
         meId={me.id}
         title="Players"
         header={
-          tableNumber === undefined ? undefined : amCaptain ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={() => releaseCaptaincy(code, tableNumber)}
-            >
-              Step down
-            </Button>
-          ) : captainId ? (
-            <span className="text-xs text-muted-foreground">Captain: {captainName}</span>
-          ) : (
-            <Button
-              size="sm"
-              className="text-xs"
-              data-testid="claim-captaincy"
-              onClick={() => claimCaptaincy(code, tableNumber)}
-            >
-              Be captain
-            </Button>
+          tableNumber === undefined ? undefined : (
+            <span className="text-xs text-muted-foreground">
+              {captainName ? `Captain: ${captainName}` : "Captain: host"}
+            </span>
           )
         }
         actionsFor={(player) => {

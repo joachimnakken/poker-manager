@@ -91,6 +91,8 @@ export interface Tournament {
   code: string;
   anchor: ClockAnchor;
   seatsPerTable: number;
+  /** The player the host is sitting as, if they have marked themselves. */
+  hostPlayerId?: string;
   tables: TableInfo[];
   proposals: Proposal[];
 }

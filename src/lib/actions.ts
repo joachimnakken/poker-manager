@@ -24,6 +24,6 @@ export type Action =
   | { type: "clear-seats" }
   | { type: "move-player"; playerId: string; toTable: number; toSeat: number }
   | { type: "update-config"; config: Partial<TournamentConfig>; seatsPerTable?: number }
-  | { type: "claim-captaincy"; tableNumber: number }
-  | { type: "release-captaincy"; tableNumber: number }
-  | { type: "assign-captain"; tableNumber: number; playerId: string | null };
+  | { type: "assign-captain"; tableNumber: number; playerId: string | null }
+  /** Which player the host is sitting as. Their token then carries owner authority. */
+  | { type: "set-host-player"; playerId: string | null };
