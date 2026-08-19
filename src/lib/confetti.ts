@@ -25,6 +25,11 @@ const GOLD = ["#fcd34d", "#fbbf24", "#f59e0b", "#fffbeb", "#ffffff"];
 
 const GRAVITY = 900;
 const DRAG = 0.86;
+/**
+ * How far a burst throws its pieces. Drag is exponential, so a piece travels roughly
+ * `speed / 9` pixels before settling — which makes this a near-linear radius multiplier.
+ */
+const BLAST = 3;
 
 export function spawnBurst(x: number, y: number, gold = false): Confetto[] {
   const palette = gold ? GOLD : FESTIVE;
@@ -32,13 +37,13 @@ export function spawnBurst(x: number, y: number, gold = false): Confetto[] {
 
   return Array.from({ length: count }, () => {
     const angle = Math.random() * Math.PI * 2;
-    const speed = 180 + Math.random() * 420;
+    const speed = (180 + Math.random() * 420) * BLAST;
     const ttl = 0.9 + Math.random() * 0.7;
     return {
       x,
       y,
       vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed - 120,
+      vy: Math.sin(angle) * speed - 120 * BLAST,
       rotation: Math.random() * Math.PI,
       spin: (Math.random() - 0.5) * 14,
       life: ttl,

@@ -53,3 +53,15 @@ describe("stepConfetti", () => {
     assert.equal(opacityOf(piece), 0);
   });
 });
+
+describe("blast radius", () => {
+  test("a burst throws pieces well clear of the card it came from", () => {
+    let pieces = spawnBurst(0, 0);
+    for (let i = 0; i < 30; i++) {
+      pieces = stepConfetti(pieces, 1 / 60);
+    }
+    const furthest = Math.max(...pieces.map((p) => Math.hypot(p.x, p.y)));
+    // A card is 128x176, so anything under about that is a puff, not a blast.
+    assert.ok(furthest > 180, `furthest piece only reached ${Math.round(furthest)}px`);
+  });
+});
