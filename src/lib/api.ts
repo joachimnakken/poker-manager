@@ -50,6 +50,8 @@ export interface CheckinRequest {
 
 export interface CheckinResponse {
   playerId: string;
+  /** False when this profile has no photo yet, which is when the camera is offered. */
+  hasAvatar: boolean;
   playerToken: string;
   profileToken: string;
   firstName: string;

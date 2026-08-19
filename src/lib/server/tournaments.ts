@@ -34,6 +34,7 @@ interface PlayerRow {
   id: string;
   tournament_id: string;
   name: string;
+  profile_id: string | null;
   rebuys: number;
   has_addon: boolean;
   is_active: boolean;
@@ -100,6 +101,7 @@ function toPlayer(row: PlayerRow): Player {
   return {
     id: row.id,
     name: row.name,
+    profileId: row.profile_id ?? undefined,
     rebuys: row.rebuys,
     hasAddon: row.has_addon,
     isActive: row.is_active,
@@ -190,7 +192,7 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
 
   const [players, tables, seats, knockouts, proposals] = await Promise.all([
     query<PlayerRow>(
-      `select id, tournament_id, name, rebuys, has_addon, is_active, finish_position,
+      `select id, tournament_id, name, profile_id, rebuys, has_addon, is_active, finish_position,
               knocked_out_in_level, knocked_out_by
        from players where tournament_id = any($1) order by checked_in_at, id`,
       [ids],

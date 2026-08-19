@@ -1,4 +1,4 @@
-import { query } from "./db";
+import { query, serializable } from "./db";
 import { calculatePayouts, type PotEntry } from "../prize-calculator";
 import type { ProfileStats } from "../api";
 import type { TournamentConfig } from "../types";
@@ -157,4 +157,101 @@ export async function leaderboard(): Promise<ProfileStats[]> {
 export async function statsForProfile(profileId: string): Promise<ProfileStats | null> {
   const all = await leaderboard();
   return all.find((entry) => entry.profileId === profileId) ?? null;
+}
+
+export interface NightPlayed {
+  code: string;
+  name: string;
+  date: string;
+  players: number;
+  finishPosition: number | null;
+  winnings: number;
+  currency: string;
+}
+
+/**
+ * The nights this profile has played, newest first. Finished tournaments only, matching
+ * the leaderboard — a night still in progress has no placing to report yet.
+ */
+export async function profileHistory(profileId: string): Promise<NightPlayed[]> {
+  const rows = await query<{
+    code: string;
+    name: string;
+    date: string;
+    config: TournamentConfig;
+    finish_position: number | null;
+    players: number;
+    entries: PotEntry[] | null;
+  }>(
+    `select t.code, t.name, to_char(t.date, 'YYYY-MM-DD') as date, t.config,
+            p.finish_position,
+            (select count(*)::int from players x where x.tournament_id = t.id) as players,
+            (select json_agg(json_build_object('rebuys', x.rebuys, 'hasAddon', x.has_addon))
+             from players x where x.tournament_id = t.id) as entries
+     from players p
+     join tournaments t on t.id = p.tournament_id
+     where p.profile_id = $1 and t.status = 'finished'
+     order by t.date desc, t.created_at desc`,
+    [profileId],
+  );
+
+  return rows.map((row) => {
+    const payout = calculatePayouts(row.entries ?? [], row.config).find(
+      (entry) => entry.position === row.finish_position,
+    );
+    return {
+      code: row.code,
+      name: row.name,
+      date: row.date,
+      players: row.players,
+      finishPosition: row.finish_position,
+      winnings: payout?.amount ?? 0,
+      currency: row.config.currency,
+    };
+  });
+}
+
+/**
+ * Renames a profile, and the player rows that point at it in tournaments still running,
+ * so a rename does not leave an old name at the table. Names are unique per profile and
+ * per tournament, so a clash is reported rather than silently dropped.
+ */
+export async function renameProfile(
+  profileId: string,
+  firstName: string,
+  lastName: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const full = `${firstName.trim()} ${lastName.trim()}`;
+  try {
+    await serializable(async (client) => {
+      await client.query(`update profiles set first_name = $2, last_name = $3 where id = $1`, [
+        profileId,
+        firstName.trim(),
+        lastName.trim(),
+      ]);
+      await client.query(
+        `update players p set name = $2
+         from tournaments t
+         where p.profile_id = $1 and t.id = p.tournament_id and t.status <> 'finished'`,
+        [profileId, full],
+      );
+    });
+    return { ok: true };
+  } catch (error) {
+    // 23505 is the unique index: either the name is another profile's, or someone at a
+    // table this profile is sitting at already goes by it.
+    if ((error as { code?: string }).code === "23505") {
+      return { ok: false, reason: "That name is already taken" };
+    }
+    throw error;
+  }
+}
+
+/** Whether this profile already has a photo — the phone only offers the camera once. */
+export async function profileHasAvatar(profileId: string): Promise<boolean> {
+  const [row] = await query<{ has: boolean }>(
+    `select (avatar is not null) as has from profiles where id = $1`,
+    [profileId],
+  );
+  return row?.has === true;
 }

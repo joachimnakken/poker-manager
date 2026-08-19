@@ -7,7 +7,7 @@ import { useClockTick } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { clearProfile, getIdentity, getProfile, type StoredProfile } from "@/lib/identity";
 import { didYouMean } from "@/lib/name-match";
-import type { CheckinRequest, ProfileStats, StatsResponse } from "@/lib/api";
+import type { CheckinRequest, StatsResponse } from "@/lib/api";
 import { formatTime, formatChips, getAverageStack, formatCurrency } from "@/lib/tournament-utils";
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { CHIP_SET } from "@/lib/constants";
@@ -21,6 +21,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Player, Tournament } from "@/lib/types";
 import { PlayerNav } from "@/components/player-nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { SelfieCapture } from "@/components/selfie-capture";
+import { Avatar } from "@/components/avatar";
 
 const LAYOUT_KEY = "poker-phone-layout";
 type Layout = "companion" | "clock";
@@ -39,7 +41,8 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [hasOwnerToken, setHasOwnerToken] = useState(false);
   const [layout, setLayout] = useState<Layout>("companion");
-  const [myStats, setMyStats] = useState<ProfileStats | null>(null);
+  // Offered once, when the profile has no photo yet. Always skippable.
+  const [needsPhoto, setNeedsPhoto] = useState(false);
 
   useEffect(() => {
     const identity = getIdentity(code);
@@ -121,7 +124,7 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
               const result = await checkIn(code, request);
               if (result) {
                 setPlayerId(result.playerId);
-                setMyStats(result.stats);
+                setNeedsPhoto(!result.hasAvatar);
               }
             }}
           />
@@ -133,10 +136,29 @@ export default function PhonePage({ params }: { params: Promise<{ code: string }
             <Spectator tournament={tournament} />
           </>
         )
+      ) : needsPhoto ? (
+        <Card>
+          <CardContent className="pt-4">
+            <SelfieCapture
+              onSkip={() => setNeedsPhoto(false)}
+              onCapture={async (image) => {
+                const stored = getProfile();
+                if (stored) {
+                  await fetch("/api/profiles/avatar", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ profileToken: stored.profileToken, image }),
+                  });
+                }
+                setNeedsPhoto(false);
+              }}
+            />
+          </CardContent>
+        </Card>
       ) : tournament.status === "finished" ? (
         <Results tournament={tournament} me={me} />
       ) : tournament.status === "setup" ? (
-        <PreGame tournament={tournament} me={me} seat={myTable} stats={myStats} />
+        <PreGame tournament={tournament} me={me} seat={myTable} />
       ) : !me.isActive ? (
         <Busted tournament={tournament} me={me} />
       ) : (
@@ -421,70 +443,6 @@ function CheckIn({ onSubmit }: { onSubmit: (request: CheckinRequest) => Promise<
   );
 }
 
-/**
- * Career record across finished nights. During a normal check-in the stats arrive with
- * the response; after a refresh they are refetched from the leaderboard and matched by
- * the stored name (unique per profile, so the match is exact).
- */
-function CareerCard({ stats: given }: { stats: ProfileStats | null }) {
-  const [stats, setStats] = useState<ProfileStats | null>(given);
-
-  useEffect(() => {
-    if (given) {
-      setStats(given);
-      return;
-    }
-    const profile = getProfile();
-    if (!profile) return;
-    let cancelled = false;
-    fetch("/api/stats", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data: StatsResponse) => {
-        if (cancelled) return;
-        setStats(
-          data.leaderboard.find(
-            (entry) =>
-              entry.firstName.toLowerCase() === profile.firstName.toLowerCase() &&
-              entry.lastName.toLowerCase() === profile.lastName.toLowerCase(),
-          ) ?? null,
-        );
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [given]);
-
-  if (!stats) return null;
-
-  return (
-    <Card data-testid="career-card">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Your career</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {stats.nights === 0 ? (
-          <p className="text-sm text-muted-foreground">First night on record — good luck!</p>
-        ) : (
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <MiniStat label="Nights" value={String(stats.nights)} />
-            <MiniStat label="Wins" value={String(stats.wins)} />
-            <MiniStat label="KOs" value={String(stats.knockouts)} />
-            <MiniStat
-              label="Best finish"
-              value={stats.bestFinish !== null ? `#${stats.bestFinish}` : "—"}
-            />
-            <MiniStat
-              label="Winnings"
-              value={formatCurrency(stats.winnings, stats.currency ?? "")}
-            />
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 function ChipReference({ startingChips }: { startingChips: number }) {
   return (
     <Card>
@@ -516,12 +474,10 @@ function PreGame({
   tournament,
   me,
   seat,
-  stats,
 }: {
   tournament: Tournament;
   me: Player;
   seat?: { table: number; seat: number };
-  stats: ProfileStats | null;
 }) {
   return (
     <div className="space-y-4">
@@ -543,7 +499,6 @@ function PreGame({
         </CardContent>
       </Card>
       <FieldPanel tournament={tournament} meId={me.id} title="Checked in" />
-      <CareerCard stats={stats} />
       <ChipReference startingChips={tournament.config.startingChips} />
     </div>
   );
@@ -619,6 +574,7 @@ function FieldPanel({
                 {seat.seat}
               </span>
             )}
+            <Avatar profileId={player.profileId} name={player.name} className="h-7 w-7" />
             <span
               className={cn(
                 "flex-1 truncate text-sm font-medium",

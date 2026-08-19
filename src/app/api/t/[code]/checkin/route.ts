@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/server/db";
 import { loadTournament, resolveTournament } from "@/lib/server/tournaments";
 import { seatLateArrival } from "@/lib/server/actions";
-import { findOrCreateProfile, profileByToken, statsForProfile } from "@/lib/server/profiles";
+import {
+  findOrCreateProfile,
+  profileByToken,
+  profileHasAvatar,
+  statsForProfile,
+} from "@/lib/server/profiles";
 import type { CheckinRequest } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +62,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
     firstName: profile.firstName,
     lastName: profile.lastName,
     stats: await statsForProfile(profile.id),
+    hasAvatar: await profileHasAvatar(profile.id),
     tournament: await loadTournament(code),
     serverNow: new Date().toISOString(),
   });

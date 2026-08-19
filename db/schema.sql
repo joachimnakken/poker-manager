@@ -32,6 +32,12 @@ create table if not exists profiles (
   created_at    timestamptz not null default now()
 );
 
+-- A small square JPEG, base64, taken at first check-in. Kept on the profile rather
+-- than in blob storage because a friend group's worth of 200x200 thumbnails is a few
+-- hundred kilobytes in total, and it is served from its own cached endpoint so it never
+-- rides the tournament state that every phone polls.
+alter table profiles add column if not exists avatar text;
+
 create unique index if not exists profiles_name_idx
   on profiles (lower(first_name), lower(last_name));
 

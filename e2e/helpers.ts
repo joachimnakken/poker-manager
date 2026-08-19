@@ -59,16 +59,21 @@ export async function checkIn(page: Page, code: string, firstName: string): Prom
   await page.getByPlaceholder("First name").fill(firstName);
   await page.getByPlaceholder("Last name").fill("Test");
   await page.getByRole("button", { name: "I'm in" }).click();
-  // Fixture names sit one edit apart (Cap1/Cap2), which rightly trips the did-you-mean
-  // prompt — every fixture player is a new person, so answer "I'm new" when asked.
+  // Three things can follow "I'm in": the did-you-mean prompt (fixture names sit one
+  // edit apart), the camera offered to a brand-new profile, or the checked-in view.
   const newProfile = page.getByTestId("checkin-new-profile");
-  await expect(page.getByText("Checked in as").or(newProfile).first()).toBeVisible({
-    timeout: 10_000,
-  });
+  const skipSelfie = page.getByTestId("skip-selfie");
+  const checkedIn = page.getByText("Checked in as");
+
+  await expect(checkedIn.or(newProfile).or(skipSelfie).first()).toBeVisible({ timeout: 15_000 });
   if (await newProfile.isVisible()) {
     await newProfile.click();
+    await expect(checkedIn.or(skipSelfie).first()).toBeVisible({ timeout: 15_000 });
   }
-  await expect(page.getByText("Checked in as")).toBeVisible();
+  if (await skipSelfie.isVisible()) {
+    await skipSelfie.click();
+  }
+  await expect(checkedIn).toBeVisible();
   // Target the identity card: the name also appears in the field list below it.
   await expect(page.getByTestId("my-name")).toHaveText(fullName(firstName));
 }

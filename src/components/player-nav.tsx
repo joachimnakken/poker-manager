@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Gavel, ListOrdered, Trophy } from "lucide-react";
+import { Gavel, ListOrdered, Trophy, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/rankings", label: "Rankings", Icon: ListOrdered },
   { href: "/showdown", label: "Showdown", Icon: Gavel },
   { href: "/stats", label: "Stats", Icon: Trophy },
+  { href: "/profile", label: "You", Icon: User },
 ];
 
 /**
@@ -18,7 +19,7 @@ const LINKS = [
  */
 export function PlayerNav({ className }: { className?: string }) {
   return (
-    <nav className={cn("grid grid-cols-3 gap-2", className)}>
+    <nav className={cn("grid grid-cols-4 gap-2", className)}>
       {LINKS.map(({ href, label, Icon }) => (
         <Link
           key={href}

@@ -26,6 +26,8 @@ export interface TournamentConfig {
 export interface Player {
   id: string;
   name: string;
+  /** The person behind this seat, for the avatar endpoint and career stats. */
+  profileId?: string;
   rebuys: number;
   hasAddon: boolean;
   isActive: boolean;
