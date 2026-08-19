@@ -213,9 +213,6 @@ async function setSeats(
     perTable[index % tableCount].push(playerId);
   });
 
-  await query(`delete from seats where tournament_id = $1`, [tournamentId]);
-  await query(`delete from tables where tournament_id = $1`, [tournamentId]);
-
   const values: string[] = [];
   const params: unknown[] = [tournamentId];
   perTable.forEach((table, tableIndex) => {
@@ -225,17 +222,28 @@ async function setSeats(
     });
   });
 
-  if (values.length > 0) {
-    await query(
-      `insert into seats (tournament_id, player_id, table_number, seat_number) values ${values.join(", ")}`,
-      params,
-    );
-    await query(
-      `insert into tables (tournament_id, table_number)
-       select $1, generate_series(1, $2)`,
-      [tournamentId, tableCount],
-    );
-  }
+  // One transaction holding the same tournament-row lock `seatLateArrival` takes.
+  // Without it a guest checking in mid-draw lands in the gap between the delete and
+  // the insert, and the host's draw dies on the unique (table, seat) index. The
+  // shuffle stays outside the callback so a serialization retry replays this draw
+  // rather than dealing a different one.
+  await serializable(async (client) => {
+    await client.query(`select 1 from tournaments where id = $1 for update`, [tournamentId]);
+    await client.query(`delete from seats where tournament_id = $1`, [tournamentId]);
+    await client.query(`delete from tables where tournament_id = $1`, [tournamentId]);
+
+    if (values.length > 0) {
+      await client.query(
+        `insert into seats (tournament_id, player_id, table_number, seat_number) values ${values.join(", ")}`,
+        params,
+      );
+      await client.query(
+        `insert into tables (tournament_id, table_number)
+         select $1, generate_series(1, $2)`,
+        [tournamentId, tableCount],
+      );
+    }
+  });
 }
 
 /**
@@ -249,6 +257,9 @@ export async function movePlayer(
   toSeat: number,
 ): Promise<void> {
   await serializable(async (client) => {
+    // Same lock as the draw and the late-arrival seater — a host's move racing a
+    // check-in would otherwise collide on the unique (table, seat) index.
+    await client.query(`select 1 from tournaments where id = $1 for update`, [tournamentId]);
     const { rows: current } = await client.query<{ table_number: number }>(
       `select table_number from seats where tournament_id = $1 and player_id = $2 for update`,
       [tournamentId, playerId],
@@ -295,6 +306,129 @@ export async function movePlayer(
            where s.tournament_id = $1 and s.table_number = $2 and p.is_active
          )`,
       [tournamentId, current[0].table_number],
+    );
+  });
+}
+
+/**
+ * Seats one player into the next free seat, or does nothing when the tournament has no
+ * draw yet — then the host draws for the whole field later, as normal.
+ *
+ * For arrivals that land after the draw. It never issues an `update seats`, so it cannot
+ * move anyone who has already physically sat down; the only change is adding one chair.
+ * Calling it twice for the same player is a no-op.
+ */
+export async function seatLateArrival(tournamentId: string, playerId: string): Promise<void> {
+  await serializable(async (client) => {
+    // One seat-picker at a time per tournament. Picking is read-then-insert, so two
+    // guests scanning the QR together would both read the same seat as free; the unique
+    // (table, seat) index would then reject the loser with 23505, which `serializable`
+    // does not retry. The lock is what makes that unreachable, and it returns a value
+    // the pick needs anyway.
+    const { rows: tournamentRows } = await client.query<{ seats_per_table: number }>(
+      `select seats_per_table from tournaments where id = $1 for update`,
+      [tournamentId],
+    );
+    if (tournamentRows.length === 0) {
+      return;
+    }
+    const seatsPerTable = tournamentRows[0].seats_per_table;
+
+    const { rows: guard } = await client.query<{
+      is_active: boolean;
+      already_seated: boolean;
+      has_draw: boolean;
+    }>(
+      `select p.is_active,
+              exists (select 1 from seats where tournament_id = $1 and player_id = $2)
+                as already_seated,
+              exists (select 1 from tables where tournament_id = $1)
+                or exists (select 1 from seats where tournament_id = $1) as has_draw
+       from players p
+       where p.tournament_id = $1 and p.id = $2`,
+      [tournamentId, playerId],
+    );
+    if (
+      guard.length === 0 ||
+      !guard[0].has_draw ||
+      guard[0].already_seated ||
+      !guard[0].is_active
+    ) {
+      return;
+    }
+
+    // A seat counts as free when no *active* player holds it, matching movePlayer and
+    // the balance advisor. Emptiest table first keeps arrivals alternating the way the
+    // draw's round-robin does; a table emptied during play sorts last, so a latecomer
+    // joins live players instead of sitting alone.
+    const { rows: target } = await client.query<{ table_number: number; seat_number: number }>(
+      `with table_numbers as (
+         select table_number from tables where tournament_id = $1
+         union
+         select table_number from seats where tournament_id = $1
+       ),
+       occupancy as (
+         select t.table_number,
+                count(*) filter (where p.is_active) as active_count
+         from table_numbers t
+         left join seats s on s.tournament_id = $1 and s.table_number = t.table_number
+         left join players p on p.id = s.player_id
+         group by t.table_number
+       )
+       select o.table_number, g.seat_number
+       from occupancy o
+       cross join generate_series(1, $2::int) as g(seat_number)
+       where o.active_count < $2::int
+         and not exists (
+           select 1 from seats s
+           join players p on p.id = s.player_id
+           where s.tournament_id = $1
+             and s.table_number = o.table_number
+             and s.seat_number = g.seat_number
+             and p.is_active
+         )
+       order by (o.active_count = 0), o.active_count, o.table_number, g.seat_number
+       limit 1`,
+      [tournamentId, seatsPerTable],
+    );
+
+    let tableNumber: number;
+    let seatNumber: number;
+    if (target.length > 0) {
+      tableNumber = target[0].table_number;
+      seatNumber = target[0].seat_number;
+    } else {
+      // Every table is full, so the night grows one more — one at a time, since the
+      // next arrival then sees it with room and joins it.
+      const { rows: next } = await client.query<{ table_number: number }>(
+        `select coalesce(max(table_number), 0) + 1 as table_number
+         from (
+           select table_number from tables where tournament_id = $1
+           union all
+           select table_number from seats where tournament_id = $1
+         ) as used`,
+        [tournamentId],
+      );
+      tableNumber = next[0].table_number;
+      seatNumber = 1;
+    }
+
+    // Any busted player still recorded in that seat is cleared first, exactly as
+    // movePlayer does, or the unique (table, seat) index would reject the insert.
+    await client.query(
+      `delete from seats
+       where tournament_id = $1 and table_number = $2 and seat_number = $3 and player_id <> $4`,
+      [tournamentId, tableNumber, seatNumber, playerId],
+    );
+    await client.query(
+      `insert into seats (tournament_id, player_id, table_number, seat_number)
+       values ($1, $2, $3, $4)
+       on conflict (tournament_id, player_id) do nothing`,
+      [tournamentId, playerId, tableNumber, seatNumber],
+    );
+    await client.query(
+      `insert into tables (tournament_id, table_number) values ($1, $2) on conflict do nothing`,
+      [tournamentId, tableNumber],
     );
   });
 }
@@ -456,11 +590,22 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
       // Host-added players get a profile too — their night must count in career stats
       // even if they never open their phone.
       const profile = await findOrCreateProfile(firstName, lastName);
-      await query(
+      // `do update` (not `do nothing`) is what makes `returning` yield a row on the
+      // re-add path too.
+      const [added] = await query<{ id: string }>(
         `insert into players (tournament_id, name, profile_id) values ($1, $2, $3)
-         on conflict (tournament_id, name) do update set profile_id = excluded.profile_id`,
+         on conflict (tournament_id, name) do update set profile_id = excluded.profile_id
+         returning id`,
         [id, `${profile.firstName} ${profile.lastName}`, profile.id],
       );
+      // Added after the draw? Take the next free seat; everyone already seated stays
+      // put. Best-effort: the player is registered either way, so a seating failure
+      // must not read as "the player wasn't added".
+      try {
+        await seatLateArrival(id, added.id);
+      } catch (error) {
+        console.error("late-arrival seating failed", { code, playerId: added.id, error });
+      }
       return;
     }
 

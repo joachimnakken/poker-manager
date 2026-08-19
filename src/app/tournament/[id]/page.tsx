@@ -16,6 +16,7 @@ import { PrizePoolDisplay } from "@/components/tournament/prize-pool-display";
 import { KnockoutLog } from "@/components/tournament/knockout-log";
 import { SeatDraw } from "@/components/tournament/seat-draw";
 import { TableBalance } from "@/components/tournament/table-balance";
+import { SetupChecklist } from "@/components/tournament/setup-checklist";
 import { TournamentResults } from "@/components/tournament/tournament-results";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -81,6 +82,7 @@ export default function TournamentPage({ params }: { params: Promise<{ id: strin
 
       <BlindTimer tournamentId={id} />
       <StatsBar tournamentId={id} />
+      <SetupChecklist tournamentId={id} />
       <TableBalance tournamentId={id} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">

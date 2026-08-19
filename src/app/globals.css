@@ -83,119 +83,6 @@
 }
 
 .dark {
-  --background: oklch(0.13 0.005 160);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.18 0.008 160);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.18 0.008 160);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.65 0.17 155);
-  --primary-foreground: oklch(0.13 0.005 160);
-  --secondary: oklch(0.25 0.01 160);
-  --secondary-foreground: oklch(0.95 0 0);
-  --muted: oklch(0.22 0.008 160);
-  --muted-foreground: oklch(0.65 0 0);
-  --accent: oklch(0.25 0.015 160);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.65 0.2 25);
-  --border: oklch(0.3 0.01 160);
-  --input: oklch(0.25 0.01 160);
-  --ring: oklch(0.65 0.17 155);
-  --chart-1: oklch(0.65 0.17 155);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.18 0.008 160);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.65 0.17 155);
-  --sidebar-primary-foreground: oklch(0.95 0 0);
-  --sidebar-accent: oklch(0.25 0.01 160);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.3 0.01 160);
-  --sidebar-ring: oklch(0.65 0.17 155);
-}
-
-/* The lively app-wide palettes. Each sits after .dark so that when html carries
-   both classes, these variables win. Everything built on the semantic tokens —
-   home, host, settings, phone — recolors from these blocks alone; the projector
-   page styles itself explicitly and only shares the stored choice. Noir is the
-   base .dark theme and needs no block. */
-.theme-sunset {
-  --background: oklch(0.31 0.12 300);
-  --foreground: oklch(0.98 0.01 300);
-  --card: oklch(0.37 0.13 305);
-  --card-foreground: oklch(0.98 0.01 300);
-  --popover: oklch(0.34 0.12 305);
-  --popover-foreground: oklch(0.98 0.01 300);
-  --primary: oklch(0.82 0.16 85);
-  --primary-foreground: oklch(0.26 0.1 300);
-  --secondary: oklch(0.44 0.14 320);
-  --secondary-foreground: oklch(0.98 0.01 300);
-  --muted: oklch(0.4 0.11 305);
-  --muted-foreground: oklch(0.84 0.05 305);
-  --accent: oklch(0.47 0.16 330);
-  --accent-foreground: oklch(0.98 0.01 300);
-  --destructive: oklch(0.7 0.21 20);
-  --border: oklch(0.55 0.12 310 / 55%);
-  --input: oklch(0.45 0.12 310);
-  --ring: oklch(0.74 0.19 330);
-  --chart-1: oklch(0.82 0.16 85);
-  --chart-2: oklch(0.78 0.13 200);
-  --chart-3: oklch(0.8 0.17 140);
-  --chart-4: oklch(0.74 0.19 330);
-  --chart-5: oklch(0.7 0.19 20);
-}
-
-.theme-sunset body {
-  background-image: linear-gradient(
-    135deg,
-    oklch(0.33 0.14 285),
-    oklch(0.35 0.15 320) 55%,
-    oklch(0.39 0.14 345)
-  );
-  background-attachment: fixed;
-}
-
-/* Casino table: deep felt green with gold. */
-.theme-felt {
-  --background: oklch(0.3 0.07 155);
-  --foreground: oklch(0.98 0.01 150);
-  --card: oklch(0.35 0.08 155);
-  --card-foreground: oklch(0.98 0.01 150);
-  --popover: oklch(0.33 0.07 155);
-  --popover-foreground: oklch(0.98 0.01 150);
-  --primary: oklch(0.83 0.15 90);
-  --primary-foreground: oklch(0.28 0.07 120);
-  --secondary: oklch(0.41 0.08 160);
-  --secondary-foreground: oklch(0.98 0.01 150);
-  --muted: oklch(0.38 0.07 155);
-  --muted-foreground: oklch(0.83 0.04 150);
-  --accent: oklch(0.44 0.09 165);
-  --accent-foreground: oklch(0.98 0.01 150);
-  --destructive: oklch(0.68 0.21 25);
-  --border: oklch(0.52 0.07 155 / 55%);
-  --input: oklch(0.42 0.07 155);
-  --ring: oklch(0.83 0.15 90);
-  --chart-1: oklch(0.83 0.15 90);
-  --chart-2: oklch(0.78 0.14 150);
-  --chart-3: oklch(0.78 0.13 200);
-  --chart-4: oklch(0.72 0.17 60);
-  --chart-5: oklch(0.68 0.21 25);
-}
-
-.theme-felt body {
-  background-image: linear-gradient(
-    135deg,
-    oklch(0.28 0.07 150),
-    oklch(0.32 0.08 158) 55%,
-    oklch(0.34 0.08 170)
-  );
-  background-attachment: fixed;
-}
-
-/* Deep water: navy through cyan. */
-.theme-ocean {
   --background: oklch(0.3 0.09 250);
   --foreground: oklch(0.98 0.01 240);
   --card: oklch(0.35 0.09 250);
@@ -219,51 +106,25 @@
   --chart-3: oklch(0.8 0.12 180);
   --chart-4: oklch(0.74 0.12 270);
   --chart-5: oklch(0.7 0.21 20);
+  --sidebar: oklch(0.35 0.09 250);
+  --sidebar-foreground: oklch(0.98 0.01 240);
+  --sidebar-primary: oklch(0.83 0.12 210);
+  --sidebar-primary-foreground: oklch(0.27 0.08 250);
+  --sidebar-accent: oklch(0.45 0.11 230);
+  --sidebar-accent-foreground: oklch(0.98 0.01 240);
+  --sidebar-border: oklch(0.55 0.09 245 / 55%);
+  --sidebar-ring: oklch(0.8 0.13 210);
 }
 
-.theme-ocean body {
+/* Deep water: navy through cyan. The one palette — html always carries .dark, so
+   these values are simply the app's colours. Everything built on the semantic
+   tokens recolors from here; the projector page styles itself explicitly. */
+body {
   background-image: linear-gradient(
     135deg,
     oklch(0.29 0.1 265),
     oklch(0.32 0.1 245) 55%,
     oklch(0.36 0.1 215)
-  );
-  background-attachment: fixed;
-}
-
-/* Fireside: burgundy through warm gold. */
-.theme-ember {
-  --background: oklch(0.3 0.09 25);
-  --foreground: oklch(0.98 0.01 40);
-  --card: oklch(0.35 0.1 27);
-  --card-foreground: oklch(0.98 0.01 40);
-  --popover: oklch(0.33 0.09 27);
-  --popover-foreground: oklch(0.98 0.01 40);
-  --primary: oklch(0.8 0.15 70);
-  --primary-foreground: oklch(0.28 0.08 30);
-  --secondary: oklch(0.42 0.1 30);
-  --secondary-foreground: oklch(0.98 0.01 40);
-  --muted: oklch(0.38 0.09 28);
-  --muted-foreground: oklch(0.85 0.04 40);
-  --accent: oklch(0.46 0.12 40);
-  --accent-foreground: oklch(0.98 0.01 40);
-  --destructive: oklch(0.75 0.22 25);
-  --border: oklch(0.54 0.1 30 / 55%);
-  --input: oklch(0.44 0.1 30);
-  --ring: oklch(0.8 0.15 70);
-  --chart-1: oklch(0.8 0.15 70);
-  --chart-2: oklch(0.75 0.16 45);
-  --chart-3: oklch(0.83 0.14 90);
-  --chart-4: oklch(0.7 0.18 20);
-  --chart-5: oklch(0.78 0.11 240);
-}
-
-.theme-ember body {
-  background-image: linear-gradient(
-    135deg,
-    oklch(0.29 0.1 15),
-    oklch(0.33 0.11 33) 55%,
-    oklch(0.35 0.11 50)
   );
   background-attachment: fixed;
 }

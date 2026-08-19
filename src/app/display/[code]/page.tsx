@@ -10,132 +10,34 @@ import { formatTime, getAverageStack, formatChips } from "@/lib/tournament-utils
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
-import { useAppTheme, type AppTheme } from "@/store/use-theme";
 import type { Tournament } from "@/lib/types";
 
 /**
- * Both projector palettes in one place, keyed by the app-wide theme from
- * useAppTheme — the projector reads across a room, so it styles itself with
- * explicit classes instead of the semantic tokens. Full class literals on
- * purpose — Tailwind only generates classes it can see in the source.
+ * The projector's palette. It reads across a room, so it styles itself with explicit
+ * classes rather than the semantic tokens the rest of the app uses — full class
+ * literals on purpose, since Tailwind only generates classes it can see in the source.
  */
-const THEMES = {
-  sunset: {
-    pageBg: "bg-gradient-to-br from-indigo-800 via-violet-800 to-fuchsia-700",
-    prestartBg: "bg-gradient-to-br from-violet-700 via-fuchsia-600 to-orange-500",
-    statusLabel: "text-amber-300",
-    levelLabel: "text-cyan-200",
-    muted: "text-white/60",
-    payoutPosition: "text-amber-300",
-    seatNumber: "text-white/50",
-    busted: "text-white/40 line-through",
-    tableCard: "border border-white/20 bg-white/10",
-    statCard: "rounded-2xl bg-white/10 p-4",
-    critical: "text-red-300",
-    accent: "text-amber-300",
-    qrCard: "shadow-2xl shadow-fuchsia-950/50",
-    prestartHint: "text-white/90",
-    nameColors: ["text-amber-300", "text-cyan-200", "text-lime-300", "text-rose-200", "text-white"],
-    nameOpacityBase: 0.65,
-    nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
-  },
-  felt: {
-    pageBg: "bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900",
-    prestartBg: "bg-gradient-to-br from-emerald-900 via-green-800 to-teal-800",
-    statusLabel: "text-yellow-300",
-    levelLabel: "text-emerald-200",
-    muted: "text-white/60",
-    payoutPosition: "text-yellow-300",
-    seatNumber: "text-white/50",
-    busted: "text-white/40 line-through",
-    tableCard: "border border-white/20 bg-white/10",
-    statCard: "rounded-2xl bg-white/10 p-4",
-    critical: "text-red-300",
-    accent: "text-yellow-300",
-    qrCard: "shadow-2xl shadow-emerald-950/60",
-    prestartHint: "text-white/90",
-    nameColors: [
-      "text-yellow-200",
-      "text-emerald-200",
-      "text-lime-200",
-      "text-orange-200",
-      "text-white",
-    ],
-    nameOpacityBase: 0.65,
-    nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
-  },
-  ocean: {
-    pageBg: "bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-900",
-    prestartBg: "bg-gradient-to-br from-indigo-900 via-blue-800 to-cyan-700",
-    statusLabel: "text-cyan-300",
-    levelLabel: "text-sky-200",
-    muted: "text-white/60",
-    payoutPosition: "text-cyan-300",
-    seatNumber: "text-white/50",
-    busted: "text-white/40 line-through",
-    tableCard: "border border-white/20 bg-white/10",
-    statCard: "rounded-2xl bg-white/10 p-4",
-    critical: "text-red-300",
-    accent: "text-cyan-300",
-    qrCard: "shadow-2xl shadow-blue-950/60",
-    prestartHint: "text-white/90",
-    nameColors: [
-      "text-cyan-200",
-      "text-sky-200",
-      "text-teal-200",
-      "text-indigo-200",
-      "text-white",
-    ],
-    nameOpacityBase: 0.65,
-    nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
-  },
-  ember: {
-    pageBg: "bg-gradient-to-br from-rose-950 via-red-900 to-orange-900",
-    prestartBg: "bg-gradient-to-br from-red-900 via-orange-800 to-amber-700",
-    statusLabel: "text-amber-300",
-    levelLabel: "text-orange-200",
-    muted: "text-white/60",
-    payoutPosition: "text-amber-300",
-    seatNumber: "text-white/50",
-    busted: "text-white/40 line-through",
-    tableCard: "border border-white/20 bg-white/10",
-    statCard: "rounded-2xl bg-white/10 p-4",
-    critical: "text-yellow-300",
-    accent: "text-amber-300",
-    qrCard: "shadow-2xl shadow-red-950/60",
-    prestartHint: "text-white/90",
-    nameColors: [
-      "text-amber-200",
-      "text-orange-200",
-      "text-yellow-200",
-      "text-rose-200",
-      "text-white",
-    ],
-    nameOpacityBase: 0.65,
-    nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
-  },
-  noir: {
-    pageBg: "bg-black",
-    prestartBg: "bg-black",
-    statusLabel: "text-zinc-500",
-    levelLabel: "text-zinc-500",
-    muted: "text-zinc-500",
-    payoutPosition: "text-zinc-400",
-    seatNumber: "text-zinc-600",
-    busted: "text-zinc-600 line-through",
-    tableCard: "border border-zinc-800",
-    statCard: "rounded-2xl border border-zinc-800 p-4",
-    critical: "text-red-500",
-    accent: "text-amber-400",
-    qrCard: "",
-    prestartHint: "text-zinc-500",
-    nameColors: ["text-zinc-400"],
-    nameOpacityBase: 0.35,
-    nameShadow: "none",
-  },
-} satisfies Record<AppTheme, Record<string, unknown>>;
+const THEME = {
+  pageBg: "bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-900",
+  prestartBg: "bg-gradient-to-br from-indigo-900 via-blue-800 to-cyan-700",
+  statusLabel: "text-cyan-300",
+  levelLabel: "text-sky-200",
+  muted: "text-white/60",
+  payoutPosition: "text-cyan-300",
+  seatNumber: "text-white/50",
+  busted: "text-white/40 line-through",
+  tableCard: "border border-white/20 bg-white/10",
+  statCard: "rounded-2xl bg-white/10 p-4",
+  critical: "text-red-300",
+  accent: "text-cyan-300",
+  qrCard: "shadow-2xl shadow-blue-950/60",
+  prestartHint: "text-white/90",
+  nameColors: ["text-cyan-200", "text-sky-200", "text-teal-200", "text-indigo-200", "text-white"],
+  nameOpacityBase: 0.65,
+  nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
+};
 
-type Theme = (typeof THEMES)[AppTheme];
+type Theme = typeof THEME;
 
 /**
  * The second window on an extended display: controls stay on the laptop, this goes on
@@ -153,8 +55,7 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
   const loaded = useTournamentStore((s) => s.loaded);
   useWakeLock(tournament !== undefined && tournament.status !== "finished");
 
-  // The layout's corner pill owns switching; the projector just follows along.
-  const theme = THEMES[useAppTheme((s) => s.theme)];
+  const theme = THEME;
 
   if (!tournament) {
     return (
@@ -260,51 +161,93 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
       </div>
 
       {tableNumbers.length > 0 && (
-        <div
-          className="grid gap-6"
-          style={{ gridTemplateColumns: `repeat(${Math.min(tableNumbers.length, 4)}, minmax(0, 1fr))` }}
-        >
-          {tableNumbers.map((tableNumber) => {
-            const seats = (seatAssignments ?? [])
-              .filter((a) => a.table === tableNumber)
-              .sort((a, b) => a.seat - b.seat);
-            const captainId = tables.find((t) => t.tableNumber === tableNumber)?.captainPlayerId;
-            const left = seats.filter(
-              (a) => players.find((p) => p.id === a.playerId)?.isActive,
-            ).length;
-
-            return (
-              <div key={tableNumber} className={cn("rounded-2xl p-5", theme.tableCard)}>
-                <div className="flex items-baseline justify-between mb-3">
-                  <span className="text-3xl font-semibold">Table {tableNumber}</span>
-                  <span className={cn("text-2xl", theme.levelLabel)}>{left} left</span>
-                </div>
-                <div className="space-y-1">
-                  {seats.map((assignment) => {
-                    const player = players.find((p) => p.id === assignment.playerId);
-                    if (!player) return null;
-                    return (
-                      <div
-                        key={`${assignment.table}-${assignment.seat}`}
-                        className={cn(
-                          "flex items-baseline gap-3 text-2xl",
-                          !player.isActive && theme.busted,
-                        )}
-                      >
-                        <span className={cn("font-mono w-8", theme.seatNumber)}>
-                          {assignment.seat}
-                        </span>
-                        <span className="truncate">{player.name}</span>
-                        {player.id === captainId && <span className={theme.accent}>★</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <SeatChart tournament={tournament} theme={theme} showRemaining />
       )}
+    </div>
+  );
+}
+
+/**
+ * The per-table seating chart, shared by the live layout and the pre-start wall. Sized
+ * for a room: seat number, name, and a star on the captain. `showRemaining` is for live
+ * play, where "{n} left" means something — before the start nobody is out yet.
+ */
+function SeatChart({
+  tournament,
+  theme,
+  showRemaining = false,
+  large = false,
+}: {
+  tournament: Tournament;
+  theme: Theme;
+  showRemaining?: boolean;
+  /** Pre-start, the chart *is* the screen, so it reads a size up. */
+  large?: boolean;
+}) {
+  const { players, seatAssignments, tables } = tournament;
+  const tableNumbers = [...new Set((seatAssignments ?? []).map((a) => a.table))].sort(
+    (a, b) => a - b,
+  );
+  const columns = Math.min(Math.max(tableNumbers.length, 1), 4);
+
+  return (
+    <div
+      className="grid gap-6 w-full mx-auto"
+      style={{
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        // One table full-bleed across a 16:9 wall is mostly empty space, so cap the
+        // width per column and let the grid centre itself.
+        maxWidth: large ? `${columns * 34}rem` : undefined,
+      }}
+    >
+      {tableNumbers.map((tableNumber) => {
+        const seats = (seatAssignments ?? [])
+          .filter((a) => a.table === tableNumber)
+          .sort((a, b) => a.seat - b.seat);
+        const captainId = tables.find((t) => t.tableNumber === tableNumber)?.captainPlayerId;
+        const left = seats.filter(
+          (a) => players.find((p) => p.id === a.playerId)?.isActive,
+        ).length;
+
+        return (
+          <div key={tableNumber} className={cn("rounded-2xl p-5", theme.tableCard)}>
+            <div className="flex items-baseline justify-between mb-3">
+              <span className={cn("font-semibold", large ? "text-5xl" : "text-3xl")}>
+                Table {tableNumber}
+              </span>
+              <span className={cn(large ? "text-3xl" : "text-2xl", theme.levelLabel)}>
+                {showRemaining
+                  ? `${left} left`
+                  : `${seats.length} ${seats.length === 1 ? "seat" : "seats"}`}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {seats.map((assignment) => {
+                const player = players.find((p) => p.id === assignment.playerId);
+                if (!player) return null;
+                return (
+                  <div
+                    key={`${assignment.table}-${assignment.seat}`}
+                    className={cn(
+                      "flex items-baseline gap-3",
+                      large ? "text-4xl py-1" : "text-2xl",
+                      showRemaining && !player.isActive && theme.busted,
+                    )}
+                  >
+                    <span
+                      className={cn("font-mono", large ? "w-12" : "w-8", theme.seatNumber)}
+                    >
+                      {assignment.seat}
+                    </span>
+                    <span className="truncate">{player.name}</span>
+                    {player.id === captainId && <span className={theme.accent}>★</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -352,6 +295,40 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
   const names = tournament.players.map((player) => player.name);
   const floating = names.slice(0, MAX_FLOATING_NAMES);
   const overflow = names.length - floating.length;
+
+  // Once the host draws, the wall's job changes from "join" to "find your chair", so the
+  // chart takes the room and the QR shrinks to a corner — latecomers can still scan it.
+  if (tournament.seatAssignments !== undefined) {
+    return (
+      <div
+        className={cn("min-h-screen text-white relative p-8 flex flex-col gap-6", theme.prestartBg)}
+      >
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-6xl font-bold">Find your seat</h1>
+          <span className={cn("text-3xl", theme.prestartHint)}>
+            {names.length} checked in
+          </span>
+        </div>
+
+        <div className="flex-1 flex flex-col justify-center">
+          <SeatChart tournament={tournament} theme={theme} large />
+        </div>
+
+        <div className="flex items-center justify-center gap-6">
+          <div
+            className={cn("bg-white p-4 rounded-2xl flex items-center gap-4", theme.qrCard)}
+            data-testid="prestart-qr"
+          >
+            {joinUrl && <QRCode value={joinUrl} size={120} />}
+            <div className="text-black pr-2">
+              <div className="text-base text-zinc-600">Join code</div>
+              <div className="text-4xl font-mono font-bold tracking-[0.2em]">{code}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

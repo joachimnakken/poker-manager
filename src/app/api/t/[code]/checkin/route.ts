@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/server/db";
 import { loadTournament, resolveTournament } from "@/lib/server/tournaments";
+import { seatLateArrival } from "@/lib/server/actions";
 import { findOrCreateProfile, profileByToken, statsForProfile } from "@/lib/server/profiles";
 import type { CheckinRequest } from "@/lib/api";
 
@@ -38,6 +39,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ cod
      returning id, player_token`,
     [tournament.id, name, profile.id],
   );
+
+  // Arriving after the draw? Take the next free seat, so the response below already
+  // reads "Table 2 - Seat 4" instead of "Waiting for the host to draw seats...". This
+  // must run before loadTournament, which is evaluated inline in the response. Seating
+  // is best-effort: the guest is checked in either way.
+  try {
+    await seatLateArrival(tournament.id, player.id);
+  } catch (error) {
+    console.error("late-arrival seating failed", { code, playerId: player.id, error });
+  }
 
   return NextResponse.json({
     playerId: player.id,

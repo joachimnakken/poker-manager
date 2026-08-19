@@ -81,8 +81,7 @@ async function setUpNight(browser: Parameters<typeof openDevice>[0], name: strin
     await addPlayer(host.page, player);
   }
 
-  await host.page.getByRole("tab", { name: "Seating" }).click();
-  await host.page.getByRole("button", { name: /Draw Seats|Redraw/ }).click();
+  await host.page.getByTestId("checklist-draw-seats").click();
   await expect
     .poll(
       async () => (await readState(host.page, code)).tournament.seatAssignments?.length ?? 0,
@@ -396,14 +395,37 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
 
   // setup, seat drawn
   await addPlayer(host.page, "Pair");
-  await host.page.getByRole("tab", { name: "Seating" }).click();
-  await host.page.getByRole("button", { name: /Draw Seats|Redraw/ }).click();
+  await host.page.getByTestId("checklist-draw-seats").click();
   await expect(phone.page.getByTestId("my-seat")).toBeVisible({ timeout: 8000 });
   await noOverflow();
 
+  // The wall's job changes from "join" to "find your chair" the moment seats exist —
+  // still pre-start, which is the whole point: people can sit before the clock runs.
+  await expect(projector.page.getByText("Find your seat")).toBeVisible({ timeout: 8000 });
+  await expect(projector.page.getByTestId("prestart-qr")).toBeVisible();
+
+  // A guest arriving after the draw takes a free seat, and nobody already seated moves.
+  const seatsBefore = (await readState(host.page, code)).tournament.seatAssignments as Seat[];
+  const latecomer = await openDevice(browser, { viewport: PHONE });
+  await checkIn(latecomer.page, code, "Late");
+  await expect(latecomer.page.getByTestId("my-seat")).toBeVisible({ timeout: 8000 });
+
+  const seatsAfter = (await readState(host.page, code)).tournament.seatAssignments as Seat[];
+  expect(seatsAfter.length).toBe(seatsBefore.length + 1);
+  for (const before of seatsBefore) {
+    const still = seatsAfter.find((s) => s.playerId === before.playerId)!;
+    expect(
+      `${still.table}-${still.seat}`,
+      "an existing player was moved by a late check-in",
+    ).toBe(`${before.table}-${before.seat}`);
+  }
+  // Nobody shares a chair.
+  const occupied = seatsAfter.map((s) => `${s.table}-${s.seat}`);
+  expect(new Set(occupied).size).toBe(occupied.length);
+
   // running
   await host.page.getByRole("button", { name: "Start Tournament" }).click();
-  await expect(phone.page.getByTestId("players-left")).toHaveText("2/2", { timeout: 8000 });
+  await expect(phone.page.getByTestId("players-left")).toHaveText("3/3", { timeout: 8000 });
   await noOverflow();
 
   // Starting flips the projector from the QR wall to live play.
@@ -419,13 +441,18 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await noOverflow();
   await phone.page.getByRole("button", { name: "Table" }).click();
 
-  // busted, then finished — with two players a bust ends the tournament outright
+  // busted, then finished. Three players now (the late arrival joined), so the phone
+  // sees the Busted view first and the Results view only once one player is left.
   const { idOf } = await seatsAndPlayers(host.page, code);
   const busted = await rawAction(host.page, code, { type: "knockout", playerId: idOf("Solo") });
   expect(busted.status).toBe(200);
-  await expect(phone.page.getByTestId("my-finish-position")).toHaveText("#2", { timeout: 8000 });
+  await expect(phone.page.getByTestId("my-finish-position")).toHaveText("#3", { timeout: 8000 });
   await noOverflow();
-  await expect(phone.page.getByText("Final standings")).toBeVisible();
+
+  const decided = await rawAction(host.page, code, { type: "knockout", playerId: idOf("Late") });
+  expect(decided.status).toBe(200);
+  await expect(phone.page.getByText("Final standings")).toBeVisible({ timeout: 8000 });
+  await expect(phone.page.getByTestId("my-finish-position")).toHaveText("#3");
   await noOverflow();
 
   // The finished night flows into career stats: Pair took it down, so their profile

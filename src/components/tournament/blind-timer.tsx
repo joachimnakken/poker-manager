@@ -74,6 +74,7 @@ export function BlindTimer({ tournamentId }: { tournamentId: string }) {
   const prevLevel = useTournamentStore((s) => s.prevLevel);
   const resetLevelTimer = useTournamentStore((s) => s.resetLevelTimer);
   const resetTournament = useTournamentStore((s) => s.resetTournament);
+  const drawSeats = useTournamentStore((s) => s.drawSeats);
 
   if (!tournament) return null;
 
@@ -201,14 +202,57 @@ export function BlindTimer({ tournamentId }: { tournamentId: string }) {
 
       {/* Transport controls */}
       {status === "setup" ? (
-        <Button
-          size="lg"
-          onClick={() => startTournament(tournamentId)}
-          disabled={tournament.players.length < 2}
-          className="px-8"
-        >
-          Start Tournament
-        </Button>
+        tournament.seatAssignments === undefined ? (
+          // Starting seatless is legal but leaves every phone on "Waiting for the host to
+          // draw seats...", so it asks once. With seats drawn, Start stays one click.
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                size="lg"
+                disabled={tournament.players.length < 2}
+                className="px-8"
+                data-testid="start-tournament"
+              >
+                Start Tournament
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>No seats drawn yet</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Nobody has been given a table and a seat, so players won&apos;t know where to
+                  sit and the projector can&apos;t show a chart. Draw the seats first, or start
+                  anyway if tonight is a free-for-all.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => drawSeats(tournamentId)}
+                  data-testid="dialog-draw-seats"
+                >
+                  Draw seats
+                </AlertDialogAction>
+                <AlertDialogAction
+                  onClick={() => startTournament(tournamentId)}
+                  data-testid="dialog-start-anyway"
+                >
+                  Start anyway
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : (
+          <Button
+            size="lg"
+            onClick={() => startTournament(tournamentId)}
+            disabled={tournament.players.length < 2}
+            className="px-8"
+            data-testid="start-tournament"
+          >
+            Start Tournament
+          </Button>
+        )
       ) : status === "finished" ? (
         <AlertDialog>
           <AlertDialogTrigger asChild>
