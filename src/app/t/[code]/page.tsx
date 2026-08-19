@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Player, Tournament } from "@/lib/types";
 import { PlayerNav } from "@/components/player-nav";
 
@@ -510,7 +511,7 @@ function PreGame({
           )}
         </CardContent>
       </Card>
-      <PlayerList tournament={tournament} meId={me.id} title="Checked in" />
+      <FieldPanel tournament={tournament} meId={me.id} title="Checked in" />
       <CareerCard stats={stats} />
       <ChipReference startingChips={tournament.config.startingChips} />
     </div>
@@ -518,89 +519,155 @@ function PreGame({
 }
 
 /**
- * Everyone in the tournament, whatever their state. Active players first, then the
- * knocked-out in finishing order. Rebuys and add-ons show as badges because "did he
- * already rebuy?" is the question that starts arguments at the table.
+ * The one list of players on the phone. Active first, then the knocked-out in finishing
+ * order, struck through with their place. Rebuys and add-ons are badges because "has he
+ * already rebought?" is what starts arguments at the table.
+ *
+ * With more than one table it gains tabs, so a player can look at the whole field or
+ * just the table in front of them without a second list competing for the screen.
  */
-function PlayerList({
+function FieldPanel({
   tournament,
   meId,
   title,
+  header,
+  actionsFor,
 }: {
   tournament: Tournament;
   meId?: string;
   title: string;
+  header?: React.ReactNode;
+  actionsFor?: (player: Player) => React.ReactNode;
 }) {
-  const { players, seatAssignments } = tournament;
-  const seatOf = (playerId: string) => (seatAssignments ?? []).find((a) => a.playerId === playerId);
+  const { players, seatAssignments, tables } = tournament;
+  const tableNumbers = [...new Set((seatAssignments ?? []).map((a) => a.table))].sort(
+    (a, b) => a - b,
+  );
+  const [tab, setTab] = useState("all");
   const active = players.filter((p) => p.isActive);
-  const sorted = [...players].sort((a, b) => {
-    if (a.isActive !== b.isActive) {
-      return a.isActive ? -1 : 1;
-    }
-    if (!a.isActive && !b.isActive) {
-      return (a.finishPosition ?? 999) - (b.finishPosition ?? 999);
-    }
-    return a.name.localeCompare(b.name);
-  });
+
+  const seatOf = (playerId: string) => (seatAssignments ?? []).find((a) => a.playerId === playerId);
+  const captainOf = (table: number) =>
+    tables.find((t) => t.tableNumber === table)?.captainPlayerId;
+
+  function rowsFor(table: number | null): Player[] {
+    const scoped =
+      table === null ? players : players.filter((p) => seatOf(p.id)?.table === table);
+    return [...scoped].sort((a, b) => {
+      if (a.isActive !== b.isActive) {
+        return a.isActive ? -1 : 1;
+      }
+      if (!a.isActive && !b.isActive) {
+        return (a.finishPosition ?? 999) - (b.finishPosition ?? 999);
+      }
+      if (table !== null) {
+        return (seatOf(a.id)?.seat ?? 0) - (seatOf(b.id)?.seat ?? 0);
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  const list = (table: number | null) => (
+    <div className="space-y-1">
+      {rowsFor(table).map((player) => {
+        const seat = seatOf(player.id);
+        const isCaptain = seat !== undefined && captainOf(seat.table) === player.id;
+        return (
+          <div
+            key={player.id}
+            data-testid={`field-${player.name}`}
+            data-player-row={player.name}
+            className={cn(
+              "flex items-center gap-2 rounded-md p-2",
+              player.id === meId ? "bg-primary/10" : "bg-muted/30",
+              !player.isActive && "opacity-60",
+            )}
+          >
+            {table !== null && seat && (
+              <span className="w-4 shrink-0 text-xs font-mono text-muted-foreground">
+                {seat.seat}
+              </span>
+            )}
+            <span
+              className={cn(
+                "flex-1 truncate text-sm font-medium",
+                !player.isActive && "line-through",
+              )}
+            >
+              {player.name}
+            </span>
+
+            {isCaptain && (
+              <Badge variant="secondary" className="px-1.5 text-[10px]">
+                C
+              </Badge>
+            )}
+            {player.rebuys > 0 && (
+              <Badge variant="outline" className="px-1.5 text-[10px]">
+                R{player.rebuys}
+              </Badge>
+            )}
+            {player.hasAddon && (
+              <Badge variant="outline" className="px-1.5 text-[10px]">
+                A
+              </Badge>
+            )}
+
+            {!player.isActive ? (
+              <span
+                data-finish-position={player.name}
+                className="shrink-0 text-xs font-mono text-muted-foreground"
+              >
+                #{player.finishPosition}
+              </span>
+            ) : table === null && seat ? (
+              <span className="shrink-0 text-xs font-mono text-muted-foreground">
+                T{seat.table}&middot;S{seat.seat}
+              </span>
+            ) : null}
+
+            {player.isActive && actionsFor?.(player)}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <Card>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base">{title}</CardTitle>
-        <span className="text-xs text-muted-foreground">
-          {active.length}/{players.length} left
-        </span>
+        {header ?? (
+          <span className="text-xs text-muted-foreground">
+            {active.length}/{players.length} left
+          </span>
+        )}
       </CardHeader>
-      <CardContent className="space-y-1">
-        {sorted.map((player) => {
-          const seat = seatOf(player.id);
-          return (
-            <div
-              key={player.id}
-              data-testid={`field-${player.name}`}
-              className={cn(
-                "flex items-center gap-2 rounded-md p-2",
-                player.id === meId ? "bg-primary/10" : "bg-muted/30",
-                !player.isActive && "opacity-60",
-              )}
-            >
-              <span
-                className={cn(
-                  "text-sm font-medium truncate flex-1",
-                  !player.isActive && "line-through",
-                )}
-              >
-                {player.name}
-              </span>
-
-              {player.rebuys > 0 && (
-                <Badge variant="outline" className="text-[10px] px-1.5">
-                  R{player.rebuys}
-                </Badge>
-              )}
-              {player.hasAddon && (
-                <Badge variant="outline" className="text-[10px] px-1.5">
-                  A
-                </Badge>
-              )}
-
-              {player.isActive ? (
-                seat ? (
-                  <span className="text-xs font-mono text-muted-foreground shrink-0">
-                    T{seat.table}&middot;S{seat.seat}
-                  </span>
-                ) : (
-                  <span className="text-xs text-muted-foreground shrink-0">no seat</span>
-                )
-              ) : (
-                <span className="text-xs font-mono text-muted-foreground shrink-0">
-                  #{player.finishPosition}
-                </span>
-              )}
-            </div>
-          );
-        })}
+      <CardContent>
+        {tableNumbers.length > 1 ? (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="w-full">
+              <TabsTrigger value="all" className="flex-1">
+                All
+              </TabsTrigger>
+              {tableNumbers.map((table) => (
+                <TabsTrigger key={table} value={String(table)} className="flex-1">
+                  T{table}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value="all" className="mt-3">
+              {list(null)}
+            </TabsContent>
+            {tableNumbers.map((table) => (
+              <TabsContent key={table} value={String(table)} className="mt-3">
+                {list(table)}
+              </TabsContent>
+            ))}
+          </Tabs>
+        ) : (
+          list(null)
+        )}
       </CardContent>
     </Card>
   );
@@ -732,111 +799,103 @@ function InPlay({
 
       {tableNumber !== undefined && <ProposalsForMe tournament={tournament} canConfirm={canAct} />}
 
-      {tableNumber !== undefined && (
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">Table {tableNumber}</CardTitle>
-            {amCaptain ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-                onClick={() => releaseCaptaincy(code, tableNumber)}
-              >
-                Step down
-              </Button>
-            ) : captainId ? (
-              <span className="text-xs text-muted-foreground">Captain: {captainName}</span>
-            ) : (
-              <Button
-                size="sm"
-                className="text-xs"
-                data-testid="claim-captaincy"
-                onClick={() => claimCaptaincy(code, tableNumber)}
-              >
-                Be captain
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            <TableRoster
-              tournament={tournament}
-              tableNumber={tableNumber}
-              actions={
-                canAct
-                  ? (player) => (
-                      <span className="flex gap-1 shrink-0">
-                        {koTarget === player.id ? (
-                          <span className="flex gap-1 items-center">
-                            <span className="text-[10px] text-muted-foreground">by</span>
-                            <select
-                              autoFocus
-                              className="text-xs bg-background border rounded px-1 py-0.5 max-w-[90px]"
-                              data-testid={`ko-by-${player.name}`}
-                              defaultValue=""
-                              onChange={(e) => {
-                                knockoutPlayer(code, player.id, e.target.value || undefined);
-                                setKoTarget(null);
-                              }}
-                            >
-                              <option value="">who?</option>
-                              {active
-                                .filter((p) => p.id !== player.id)
-                                .map((p) => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.name}
-                                  </option>
-                                ))}
-                            </select>
-                          </span>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="text-[10px] h-7 px-2"
-                              data-testid={`ko-${player.name}`}
-                              onClick={() => setKoTarget(player.id)}
-                            >
-                              KO
-                            </Button>
-                            {rebuyOpen && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-[10px] h-7 px-2"
-                                onClick={() => registerRebuy(code, player.id)}
-                              >
-                                R
-                              </Button>
-                            )}
-                            {!player.hasAddon && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-[10px] h-7 px-2"
-                                onClick={() => registerAddon(code, player.id)}
-                              >
-                                A
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </span>
-                    )
-                  : undefined
-              }
-            />
-            {!canAct && (
-              <p className="text-xs text-muted-foreground mt-3">
-                Only this table&apos;s captain can record knockouts.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      <PlayerList tournament={tournament} meId={me.id} title="Everyone" />
+      <FieldPanel
+        tournament={tournament}
+        meId={me.id}
+        title="Players"
+        header={
+          tableNumber === undefined ? undefined : amCaptain ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs"
+              onClick={() => releaseCaptaincy(code, tableNumber)}
+            >
+              Step down
+            </Button>
+          ) : captainId ? (
+            <span className="text-xs text-muted-foreground">Captain: {captainName}</span>
+          ) : (
+            <Button
+              size="sm"
+              className="text-xs"
+              data-testid="claim-captaincy"
+              onClick={() => claimCaptaincy(code, tableNumber)}
+            >
+              Be captain
+            </Button>
+          )
+        }
+        actionsFor={(player) => {
+          // The host may act on anyone; a captain only on their own table. The server
+          // enforces the same rule, so this is about not offering a button that 403s.
+          const seat = (tournament.seatAssignments ?? []).find((a) => a.playerId === player.id);
+          const mine = isHost || (amCaptain && seat?.table === tableNumber);
+          if (!mine) {
+            return null;
+          }
+          return (
+            <span className="flex gap-1 shrink-0">
+              {koTarget === player.id ? (
+                <span className="flex gap-1 items-center">
+                  <span className="text-[10px] text-muted-foreground">by</span>
+                  <select
+                    autoFocus
+                    className="text-xs bg-background border rounded px-1 py-0.5 max-w-[90px]"
+                    data-testid={`ko-by-${player.name}`}
+                    defaultValue=""
+                    onChange={(e) => {
+                      knockoutPlayer(code, player.id, e.target.value || undefined);
+                      setKoTarget(null);
+                    }}
+                  >
+                    <option value="">who?</option>
+                    {active
+                      .filter((p) => p.id !== player.id)
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                  </select>
+                </span>
+              ) : (
+                <>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="text-[10px] h-7 px-2"
+                    data-testid={`ko-${player.name}`}
+                    onClick={() => setKoTarget(player.id)}
+                  >
+                    KO
+                  </Button>
+                  {rebuyOpen && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-[10px] h-7 px-2"
+                      onClick={() => registerRebuy(code, player.id)}
+                    >
+                      R
+                    </Button>
+                  )}
+                  {!player.hasAddon && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-[10px] h-7 px-2"
+                      onClick={() => registerAddon(code, player.id)}
+                    >
+                      A
+                    </Button>
+                  )}
+                </>
+              )}
+            </span>
+          );
+        }}
+      />
     </div>
   );
 }
