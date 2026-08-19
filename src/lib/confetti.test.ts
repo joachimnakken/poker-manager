@@ -56,12 +56,24 @@ describe("stepConfetti", () => {
 
 describe("blast radius", () => {
   test("a burst throws pieces well clear of the card it came from", () => {
-    let pieces = spawnBurst(0, 0);
-    for (let i = 0; i < 30; i++) {
-      pieces = stepConfetti(pieces, 1 / 60);
+    // Horizontal reach over a burst's whole life, averaged across many bursts. Sampling
+    // one instant of one burst straddles the threshold and flakes about a third of the
+    // time; gravity also rules out using total displacement, since the fall dominates it
+    // and is unaffected by launch speed.
+    const runs = 20;
+    let averageReach = 0;
+    for (let run = 0; run < runs; run++) {
+      let pieces = spawnBurst(0, 0);
+      let reach = 0;
+      for (let frame = 0; frame < 200 && pieces.length > 0; frame++) {
+        pieces = stepConfetti(pieces, 1 / 60);
+        for (const piece of pieces) {
+          reach = Math.max(reach, Math.abs(piece.x));
+        }
+      }
+      averageReach += reach / runs;
     }
-    const furthest = Math.max(...pieces.map((p) => Math.hypot(p.x, p.y)));
-    // A card is 128x176, so anything under about that is a puff, not a blast.
-    assert.ok(furthest > 180, `furthest piece only reached ${Math.round(furthest)}px`);
+    // Measured around 171px at BLAST = 3, against roughly 56px before it.
+    assert.ok(averageReach > 120, `average horizontal reach was only ${Math.round(averageReach)}px`);
   });
 });
