@@ -12,6 +12,7 @@ import type {
   TournamentStatus,
 } from "../types";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_CONFIG } from "../constants";
+import { CODE_ALPHABET, CODE_LENGTH } from "../join-code";
 
 interface TournamentRow {
   id: string;
@@ -264,9 +265,7 @@ export async function resolveTournament(
 }
 
 // No I/O/0/1 — these get read off a projector and typed into a phone.
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function randomCode(length = 5): string {
+function randomCode(length = CODE_LENGTH): string {
   let code = "";
   for (let i = 0; i < length; i++) {
     code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];

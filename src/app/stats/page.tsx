@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import type { ProfileStats, StatsResponse } from "@/lib/api";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,11 +27,8 @@ export default function StatsPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 max-w-2xl mx-auto space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div>
         <h1 className="text-2xl font-bold">Career stats</h1>
-        <Link href="/" className="text-sm text-muted-foreground underline">
-          Home
-        </Link>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

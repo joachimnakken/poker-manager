@@ -4,7 +4,7 @@ import { create } from "zustand";
 import type { Tournament, TournamentConfig } from "@/lib/types";
 import type { CheckinRequest, CheckinResponse, ListResponse, StateResponse } from "@/lib/api";
 import { levelsOverrun, readClock, serverOffset } from "@/lib/clock";
-import { setIdentity, setProfile, tokenFor } from "@/lib/identity";
+import { setIdentity, setLastJoined, setProfile, tokenFor } from "@/lib/identity";
 import type { Action } from "@/lib/actions";
 import type { Move } from "@/lib/balancing";
 import type { ProposalOp } from "@/lib/proposal-ops";
@@ -318,6 +318,8 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
           body: JSON.stringify(checkinRequest),
         });
         setIdentity(code, { playerToken: result.playerToken, playerId: result.playerId });
+        // The installed app opens straight back into this tournament.
+        setLastJoined(code);
         // The profile outlives the tournament: next poker night starts at "Join as X".
         setProfile({
           profileToken: result.profileToken,

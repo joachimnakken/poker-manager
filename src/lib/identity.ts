@@ -93,3 +93,41 @@ export function clearProfile(): void {
     window.localStorage.removeItem(PROFILE_KEY);
   }
 }
+
+/**
+ * The tournament this device last checked into. The installed app opens straight to it,
+ * so a player never sees a tournament list — and once that night is over or gone, the
+ * app falls back to the scanner rather than a stale game.
+ */
+const LAST_JOINED_KEY = "poker-last-joined";
+
+export function getLastJoined(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return window.localStorage.getItem(LAST_JOINED_KEY);
+}
+
+export function setLastJoined(code: string): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(LAST_JOINED_KEY, code.toUpperCase());
+  }
+}
+
+export function clearLastJoined(): void {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(LAST_JOINED_KEY);
+  }
+}
+
+/** True when running as an installed app rather than a browser tab. */
+export function isStandalone(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    // iOS predates the display-mode media query for home-screen apps.
+    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+  );
+}

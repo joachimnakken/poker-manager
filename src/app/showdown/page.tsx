@@ -74,11 +74,8 @@ export default function ShowdownPage() {
 
   return (
     <div className="min-h-screen px-4 py-6 max-w-md mx-auto space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div>
         <h1 className="text-2xl font-bold">Settle a showdown</h1>
-        <Link href="/" className="text-sm text-muted-foreground underline">
-          Home
-        </Link>
       </div>
       <p className="text-sm text-muted-foreground">
         Tap in the board and everyone&apos;s two cards. The winner is computed by the rules, not

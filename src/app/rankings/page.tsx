@@ -9,11 +9,8 @@ export const metadata = { title: "Poker hand rankings" };
 export default function RankingsPage() {
   return (
     <div className="min-h-screen px-4 py-6 max-w-md mx-auto space-y-4">
-      <div className="flex items-baseline justify-between">
+      <div>
         <h1 className="text-2xl font-bold">Hand rankings</h1>
-        <Link href="/" className="text-sm text-muted-foreground underline">
-          Home
-        </Link>
       </div>
       <p className="text-sm text-muted-foreground">
         Best to worst. Your hand is the best five cards out of your two plus the five on the
