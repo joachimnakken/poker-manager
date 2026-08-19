@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import QRCode from "react-qr-code";
 import { useTournamentStore } from "@/store/tournament-store";
 import { useTournamentSync } from "@/store/use-sync";
@@ -10,8 +10,8 @@ import { formatTime, getAverageStack, formatChips } from "@/lib/tournament-utils
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
-import { assignCards, isReserved } from "@/lib/name-cards";
-import { parseCard, SUIT_GLYPHS } from "@/lib/poker-hands";
+import { assignCards } from "@/lib/name-cards";
+import { BouncingCards } from "@/components/bouncing-cards";
 import type { Tournament } from "@/lib/types";
 
 /**
@@ -256,75 +256,9 @@ function SeatChart({
 /** How many floating cards the slot ring holds before overflowing into "+N more". */
 const MAX_FLOATING_CARDS = 14;
 
-/**
- * Where each checked-in player's card sits. Cards alternate sides and step down their
- * side evenly, with every other one nudged outward — that stagger is what keeps vertical
- * neighbours from overlapping, since a card is taller than the gap between rows but
- * narrower than the horizontal offset. The middle stays empty for the QR, which is the
- * one thing on this wall that must never be covered. Deterministic, because the wall
- * re-renders on every poll.
- */
-function cardSlot(index: number, total: number) {
-  const side = index % 2 === 0 ? 1 : -1;
-  const row = Math.floor(index / 2);
-  const rows = Math.max(1, Math.ceil(total / 2));
-  const top = rows === 1 ? 50 : 16 + (68 * row) / (rows - 1);
-  const left = 50 + side * (25 + (row % 2) * 11);
-
-  return {
-    top: `${top}%`,
-    left: `${left}%`,
-    tilt: ((index * 37) % 17) - 8,
-    animationDuration: `${9 + (index % 7)}s, 1.2s`,
-    animationDelay: `${-(index % 9)}s, 0s`,
-  };
-}
 
 
 
-
-/**
- * One checked-in player as a playing card, sized to be read across a room. The aces
- * belong to Joachim and Martin — see `assignCards` — so an ace on the wall is a signature
- * rather than a coincidence, and gets a gold edge to match.
- */
-function NameCard({ name, notation }: { name: string; notation: string }) {
-  const card = parseCard(notation);
-  const rank = notation[0].toUpperCase() === "T" ? "10" : notation[0].toUpperCase();
-  const red = card.suit === "h" || card.suit === "d";
-  const isAce = card.rank === 14;
-
-  return (
-    <div
-      data-testid="name-card"
-      className={cn(
-        "w-32 h-44 rounded-xl bg-white flex flex-col justify-between p-2.5",
-        isAce ? "ring-4 ring-amber-300 shadow-2xl shadow-black/50" : "shadow-xl shadow-black/40",
-      )}
-    >
-      <div
-        className={cn("flex items-center gap-1 leading-none", red ? "text-red-600" : "text-zinc-900")}
-      >
-        <span className="text-xl font-bold">{rank}</span>
-        <span className="text-xl">{SUIT_GLYPHS[card.suit]}</span>
-      </div>
-
-      <div className="px-0.5 text-center text-base font-semibold leading-tight text-zinc-900 break-words">
-        {name}
-      </div>
-
-      <div
-        className={cn(
-          "flex items-center justify-end gap-1 leading-none",
-          red ? "text-red-600" : "text-zinc-900",
-        )}
-      >
-        <span className="text-xl font-bold">{rank}</span>
-        <span className="text-xl">{SUIT_GLYPHS[card.suit]}</span>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Pre-start wall: nothing but the join QR and who's in. Flips to the live
@@ -346,6 +280,7 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
   const floating = names.slice(0, MAX_FLOATING_CARDS);
   const overflow = names.length - floating.length;
   const cards = assignCards(floating);
+  const qrRef = useRef<HTMLDivElement>(null);
 
   // Once the host draws, the wall's job changes from "join" to "find your chair", so the
   // chart takes the room and the QR shrinks to a corner — latecomers can still scan it.
@@ -388,32 +323,9 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
         theme.prestartBg,
       )}
     >
-      {floating.map((name, index) => {
-        const { top, left, tilt, animationDuration, animationDelay } = cardSlot(
-          index,
-          floating.length,
-        );
-        return (
-          <div
-            key={name}
-            className={cn("absolute select-none", isReserved(name) && "z-10")}
-            style={{
-              top,
-              left,
-              transform: `translate(-50%, -50%) rotate(${tilt}deg)`,
-              animationName: "projector-float, projector-fade-in",
-              animationDuration,
-              animationDelay,
-              animationTimingFunction: "ease-in-out, ease-out",
-              animationIterationCount: "infinite, 1",
-            }}
-          >
-            <NameCard name={name} notation={cards.get(name) ?? "2s"} />
-          </div>
-        );
-      })}
+      <BouncingCards names={floating} cards={cards} obstacleRef={qrRef} />
 
-      <div className="relative flex flex-col items-center gap-6">
+      <div ref={qrRef} className="relative flex flex-col items-center gap-6">
         <div
           className={cn("bg-white p-8 rounded-3xl flex flex-col items-center gap-5", theme.qrCard)}
           data-testid="prestart-qr"
