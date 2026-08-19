@@ -10,6 +10,8 @@ import { formatTime, getAverageStack, formatChips } from "@/lib/tournament-utils
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { cn } from "@/lib/utils";
+import { assignCards, isReserved } from "@/lib/name-cards";
+import { parseCard, SUIT_GLYPHS } from "@/lib/poker-hands";
 import type { Tournament } from "@/lib/types";
 
 /**
@@ -32,8 +34,7 @@ const THEME = {
   accent: "text-cyan-300",
   qrCard: "shadow-2xl shadow-blue-950/60",
   prestartHint: "text-white/90",
-  nameColors: ["text-cyan-200", "text-sky-200", "text-teal-200", "text-indigo-200", "text-white"],
-  nameOpacityBase: 0.65,
+  /** For text laid straight over the gradient, with no card behind it. */
   nameShadow: "0 2px 16px rgba(0, 0, 0, 0.45)",
 };
 
@@ -252,28 +253,77 @@ function SeatChart({
   );
 }
 
-/** How many floating names the slot ring holds before overflowing into "+N more". */
-const MAX_FLOATING_NAMES = 24;
+/** How many floating cards the slot ring holds before overflowing into "+N more". */
+const MAX_FLOATING_CARDS = 14;
 
 /**
- * A deterministic slot per check-in index: golden-angle spacing on two radius
- * bands around the centered QR card. Deterministic on purpose — the page
- * re-renders on every poll, and names must hold their positions across passes.
+ * Where each checked-in player's card sits. Cards alternate sides and step down their
+ * side evenly, with every other one nudged outward — that stagger is what keeps vertical
+ * neighbours from overlapping, since a card is taller than the gap between rows but
+ * narrower than the horizontal offset. The middle stays empty for the QR, which is the
+ * one thing on this wall that must never be covered. Deterministic, because the wall
+ * re-renders on every poll.
  */
-function nameSlot(index: number, theme: Theme) {
-  const angle = index * 137.5 * (Math.PI / 180);
-  const radius = index % 2 === 0 ? 30 : 41;
-  const top = Math.min(92, Math.max(8, 50 + radius * Math.sin(angle)));
-  const left = Math.min(93, Math.max(7, 50 + radius * 1.25 * Math.cos(angle)));
+function cardSlot(index: number, total: number) {
+  const side = index % 2 === 0 ? 1 : -1;
+  const row = Math.floor(index / 2);
+  const rows = Math.max(1, Math.ceil(total / 2));
+  const top = rows === 1 ? 50 : 16 + (68 * row) / (rows - 1);
+  const left = 50 + side * (25 + (row % 2) * 11);
+
   return {
     top: `${top}%`,
     left: `${left}%`,
-    fontSize: `${1.5 + (index % 5) * 0.25}rem`,
-    opacity: theme.nameOpacityBase + (index % 4) * 0.08,
-    color: theme.nameColors[index % theme.nameColors.length],
-    animationDuration: `${8 + (index % 7)}s, 1.2s`,
+    tilt: ((index * 37) % 17) - 8,
+    animationDuration: `${9 + (index % 7)}s, 1.2s`,
     animationDelay: `${-(index % 9)}s, 0s`,
   };
+}
+
+
+
+
+/**
+ * One checked-in player as a playing card, sized to be read across a room. The aces
+ * belong to Joachim and Martin — see `assignCards` — so an ace on the wall is a signature
+ * rather than a coincidence, and gets a gold edge to match.
+ */
+function NameCard({ name, notation }: { name: string; notation: string }) {
+  const card = parseCard(notation);
+  const rank = notation[0].toUpperCase() === "T" ? "10" : notation[0].toUpperCase();
+  const red = card.suit === "h" || card.suit === "d";
+  const isAce = card.rank === 14;
+
+  return (
+    <div
+      data-testid="name-card"
+      className={cn(
+        "w-32 h-44 rounded-xl bg-white flex flex-col justify-between p-2.5",
+        isAce ? "ring-4 ring-amber-300 shadow-2xl shadow-black/50" : "shadow-xl shadow-black/40",
+      )}
+    >
+      <div
+        className={cn("flex items-center gap-1 leading-none", red ? "text-red-600" : "text-zinc-900")}
+      >
+        <span className="text-xl font-bold">{rank}</span>
+        <span className="text-xl">{SUIT_GLYPHS[card.suit]}</span>
+      </div>
+
+      <div className="px-0.5 text-center text-base font-semibold leading-tight text-zinc-900 break-words">
+        {name}
+      </div>
+
+      <div
+        className={cn(
+          "flex items-center justify-end gap-1 leading-none",
+          red ? "text-red-600" : "text-zinc-900",
+        )}
+      >
+        <span className="text-xl font-bold">{rank}</span>
+        <span className="text-xl">{SUIT_GLYPHS[card.suit]}</span>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -293,8 +343,9 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
   }, [code]);
 
   const names = tournament.players.map((player) => player.name);
-  const floating = names.slice(0, MAX_FLOATING_NAMES);
+  const floating = names.slice(0, MAX_FLOATING_CARDS);
   const overflow = names.length - floating.length;
+  const cards = assignCards(floating);
 
   // Once the host draws, the wall's job changes from "join" to "find your chair", so the
   // chart takes the room and the QR shrinks to a corner — latecomers can still scan it.
@@ -338,19 +389,18 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
       )}
     >
       {floating.map((name, index) => {
-        const { top, left, fontSize, opacity, color, animationDuration, animationDelay } =
-          nameSlot(index, theme);
+        const { top, left, tilt, animationDuration, animationDelay } = cardSlot(
+          index,
+          floating.length,
+        );
         return (
-          <span
+          <div
             key={name}
-            className={cn("absolute font-semibold whitespace-nowrap select-none", color)}
+            className={cn("absolute select-none", isReserved(name) && "z-10")}
             style={{
               top,
               left,
-              fontSize,
-              opacity,
-              textShadow: theme.nameShadow,
-              transform: "translate(-50%, -50%)",
+              transform: `translate(-50%, -50%) rotate(${tilt}deg)`,
               animationName: "projector-float, projector-fade-in",
               animationDuration,
               animationDelay,
@@ -358,8 +408,8 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
               animationIterationCount: "infinite, 1",
             }}
           >
-            {name}
-          </span>
+            <NameCard name={name} notation={cards.get(name) ?? "2s"} />
+          </div>
         );
       })}
 

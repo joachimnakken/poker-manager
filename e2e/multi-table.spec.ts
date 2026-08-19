@@ -391,6 +391,8 @@ test("the phone renders every lifecycle status at 380px with no sideways scroll"
   await expect(projector.page.getByText(fullName("Solo"), { exact: true })).toBeVisible({
     timeout: 5000,
   });
+  // Checked-in players show up as playing cards, not bare names.
+  await expect(projector.page.getByTestId("name-card")).toHaveCount(1);
   await expect(projector.page.getByText(/1 checked in/)).toBeVisible();
 
   // setup, seat drawn
