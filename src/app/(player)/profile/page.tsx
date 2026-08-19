@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   clearLastJoined,
-  clearProfile,
   getLastJoined,
   getProfile,
   setProfile,
@@ -264,20 +263,9 @@ export default function ProfilePage() {
             {joined ? `Leave ${joined} and join another` : "Not at a table"}
           </Button>
           <p className="text-xs text-muted-foreground">
-            Leaving only lets go of it on this phone — you keep your seat, and scanning
-            that code again puts you straight back.
+            This only leaves the table, not your profile — you keep your seat and your
+            record, and scanning that code again puts you straight back.
           </p>
-          <Button
-            variant="ghost"
-            className="w-full text-xs text-muted-foreground"
-            onClick={() => {
-              clearProfile();
-              clearLastJoined();
-              router.push("/play");
-            }}
-          >
-            Sign out of this profile
-          </Button>
         </CardContent>
       </Card>
     </div>

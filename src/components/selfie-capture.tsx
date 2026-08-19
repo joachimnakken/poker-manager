@@ -2,12 +2,29 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 /** Small on purpose: a face at list size, not a photograph. */
 const SIZE = 256;
 const QUALITY = 0.75;
 
 type Status = "starting" | "ready" | "denied" | "unavailable";
+
+/**
+ * Photo Booth's colour effects, which are all reachable with CSS filters — the same
+ * string drives the live preview and the canvas, so what you framed is what you get.
+ * The geometric ones (bulge, twirl) would need a shader and are not here.
+ */
+const FILTERS = [
+  { name: "Normal", css: "none" },
+  { name: "Mono", css: "grayscale(1) contrast(1.15)" },
+  { name: "Sepia", css: "sepia(0.85) contrast(1.05)" },
+  { name: "Pop", css: "saturate(2.4) contrast(1.3)" },
+  { name: "Noir", css: "grayscale(1) contrast(1.7) brightness(0.9)" },
+  { name: "Thermal", css: "invert(1) hue-rotate(170deg) saturate(3)" },
+  { name: "X-Ray", css: "invert(1) grayscale(1) contrast(1.4)" },
+  { name: "Glow", css: "brightness(1.2) saturate(1.5) blur(0.4px)" },
+];
 
 /**
  * The front camera, for the picture that goes on your profile. Offered once, when a
@@ -27,6 +44,15 @@ export function SelfieCapture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<Status>("starting");
   const [saving, setSaving] = useState(false);
+  const [filter, setFilter] = useState(FILTERS[0]);
+  // Without canvas filter support the capture would ignore the effect and quietly hand
+  // back a plain photo, so the picker is only offered where it actually applies.
+  const [canFilter, setCanFilter] = useState(false);
+
+  useEffect(() => {
+    const context = document.createElement("canvas").getContext("2d");
+    setCanFilter(context !== null && "filter" in context);
+  }, []);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -76,6 +102,10 @@ export function SelfieCapture({
     canvas.width = SIZE;
     canvas.height = SIZE;
     const context = canvas.getContext("2d")!;
+    // The same filter string the preview is using, so the result matches the framing.
+    if (canFilter) {
+      context.filter = filter.css;
+    }
     // Mirror it: a selfie preview is mirrored, and an unmirrored result looks wrong.
     context.translate(SIZE, 0);
     context.scale(-1, 1);
@@ -105,6 +135,7 @@ export function SelfieCapture({
           muted
           autoPlay
           className="h-full w-full scale-x-[-1] object-cover"
+          style={{ filter: filter.css }}
           data-testid="selfie-video"
         />
         <canvas ref={canvasRef} className="hidden" />
@@ -118,6 +149,26 @@ export function SelfieCapture({
           </div>
         )}
       </div>
+
+      {canFilter && status === "ready" && (
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {FILTERS.map((option) => (
+            <button
+              key={option.name}
+              onClick={() => setFilter(option)}
+              data-testid={`filter-${option.name}`}
+              className={cn(
+                "shrink-0 rounded-full border px-3 py-1.5 text-xs transition-colors",
+                option.name === filter.name
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border text-muted-foreground",
+              )}
+            >
+              {option.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       <Button
         className="w-full"
