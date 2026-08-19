@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { seedParticle, stepParticles, type Box, type Particle } from "@/lib/card-physics";
+import { opacityOf, spawnBurst, stepConfetti, type Confetto } from "@/lib/confetti";
 import { isReserved } from "@/lib/name-cards";
 import { parseCard, SUIT_GLYPHS } from "@/lib/poker-hands";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,10 @@ import { cn } from "@/lib/utils";
 /** Must match the w-32 / h-44 on the card below — the physics works in pixels. */
 const CARD_WIDTH = 128;
 const CARD_HEIGHT = 176;
+
+/** How long a card stays gone after it goes off, and how long it takes to fade back. */
+const HIDDEN_MS = 700;
+const RETURN_MS = 500;
 
 /**
  * The pre-start wall's drifting cards. Positions live in a ref and are written straight
@@ -26,8 +31,12 @@ export function BouncingCards({
   obstacleRef: React.RefObject<HTMLElement | null>;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const nodes = useRef(new Map<string, HTMLDivElement>());
   const particles = useRef(new Map<string, Particle>());
+  // Easter egg state: when each exploded card is due back, and the live confetti.
+  const returning = useRef(new Map<string, number>());
+  const confetti = useRef<Confetto[]>([]);
   const namesRef = useRef(names);
   namesRef.current = names;
 
@@ -76,22 +85,55 @@ export function BouncingCards({
       for (const name of [...particles.current.keys()]) {
         if (!live.includes(name)) {
           particles.current.delete(name);
+          returning.current.delete(name);
         }
       }
 
       const order = live.filter((name) => particles.current.has(name));
       const active = order.map((name) => particles.current.get(name)!);
-      stepParticles(active, width, height, obstacle(), dt);
+      const cornerHits = stepParticles(active, width, height, obstacle(), dt);
+
+      // A card that catches a corner dead on goes off in confetti and comes back.
+      for (const index of cornerHits) {
+        const name = order[index];
+        if (name === undefined || returning.current.has(name)) {
+          continue;
+        }
+        const particle = active[index];
+        confetti.current.push(...spawnBurst(particle.x, particle.y, isReserved(name)));
+        returning.current.set(name, now + HIDDEN_MS);
+      }
 
       for (const [index, name] of order.entries()) {
         const node = nodes.current.get(name);
         const particle = active[index];
-        if (node) {
-          node.style.transform = `translate3d(${particle.x - CARD_WIDTH / 2}px, ${
-            particle.y - CARD_HEIGHT / 2
-          }px, 0) rotate(${((index * 37) % 17) - 8}deg)`;
+        if (!node) {
+          continue;
+        }
+        node.style.transform = `translate3d(${particle.x - CARD_WIDTH / 2}px, ${
+          particle.y - CARD_HEIGHT / 2
+        }px, 0) rotate(${((index * 37) % 17) - 8}deg)`;
+
+        // Gone while the confetti flies, then fading back in mid-flight — it keeps
+        // moving the whole time, so it simply reappears wherever it now is.
+        const due = returning.current.get(name);
+        if (due === undefined) {
+          node.style.opacity = "1";
+        } else {
+          const since = now - due;
+          if (since < 0) {
+            node.style.opacity = "0";
+          } else if (since < RETURN_MS) {
+            node.style.opacity = String(since / RETURN_MS);
+          } else {
+            node.style.opacity = "1";
+            returning.current.delete(name);
+          }
         }
       }
+
+      confetti.current = stepConfetti(confetti.current, dt);
+      drawConfetti(canvasRef.current, width, height, confetti.current);
 
       frame = requestAnimationFrame(tick);
     };
@@ -102,6 +144,7 @@ export function BouncingCards({
 
   return (
     <div ref={containerRef} className="absolute inset-0 overflow-hidden">
+      <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none" />
       {names.map((name) => (
         <div
           key={name}
@@ -123,6 +166,44 @@ export function BouncingCards({
       ))}
     </div>
   );
+}
+
+/** Paints the live burst. Cleared and redrawn each frame, so nothing is retained. */
+function drawConfetti(
+  canvas: HTMLCanvasElement | null,
+  width: number,
+  height: number,
+  pieces: Confetto[],
+): void {
+  if (!canvas) {
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return;
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  for (const piece of pieces) {
+    context.save();
+    context.translate(piece.x, piece.y);
+    context.rotate(piece.rotation);
+    context.globalAlpha = opacityOf(piece);
+    context.fillStyle = piece.color;
+    // Ribbons rather than squares — they read as confetti even at a glance.
+    context.fillRect(-piece.size / 2, -piece.size / 4, piece.size, piece.size / 2);
+    context.restore();
+  }
+  context.globalAlpha = 1;
 }
 
 /**

@@ -40,26 +40,53 @@ function boxOf(p: Particle): Box {
   };
 }
 
-/** Bounce off the container edges, clamping back inside so nothing escapes. */
-function bounceOffWalls(p: Particle, width: number, height: number): void {
+/**
+ * How close to a corner still counts as hitting it. Small on purpose — the confetti is
+ * an easter egg, and it should feel earned. Raise it if you want it more often.
+ */
+export const CORNER_TOLERANCE = 8;
+
+/**
+ * Bounce off the container edges, clamping back inside so nothing escapes. Reports
+ * whether each axis turned, and whether the card finished the step hugging a wall on
+ * that axis — together those tell us it struck a corner rather than a side.
+ */
+function bounceOffWalls(
+  p: Particle,
+  width: number,
+  height: number,
+): { turnedX: boolean; turnedY: boolean; huggingX: boolean; huggingY: boolean } {
   const halfWidth = p.width / 2;
   const halfHeight = p.height / 2;
+  let turnedX = false;
+  let turnedY = false;
 
   if (p.x - halfWidth < 0) {
     p.x = halfWidth;
     p.vx = Math.abs(p.vx);
+    turnedX = true;
   } else if (p.x + halfWidth > width) {
     p.x = width - halfWidth;
     p.vx = -Math.abs(p.vx);
+    turnedX = true;
   }
 
   if (p.y - halfHeight < 0) {
     p.y = halfHeight;
     p.vy = Math.abs(p.vy);
+    turnedY = true;
   } else if (p.y + halfHeight > height) {
     p.y = height - halfHeight;
     p.vy = -Math.abs(p.vy);
+    turnedY = true;
   }
+
+  const huggingX =
+    Math.min(p.x - halfWidth, width - (p.x + halfWidth)) <= CORNER_TOLERANCE;
+  const huggingY =
+    Math.min(p.y - halfHeight, height - (p.y + halfHeight)) <= CORNER_TOLERANCE;
+
+  return { turnedX, turnedY, huggingX, huggingY };
 }
 
 /**
@@ -123,8 +150,10 @@ function collide(a: Particle, b: Particle): void {
 }
 
 /**
- * Advances the simulation in place by `dt` seconds. Mutates rather than copying: this
- * runs every animation frame, and the caller writes the results straight to transforms.
+ * Advances the simulation in place by `dt` seconds and returns the indices of any cards
+ * that struck a corner this step — a card that turned on one axis while hugging the wall
+ * on the other. Mutates rather than copying: this runs every animation frame, and the
+ * caller writes the results straight to transforms.
  */
 export function stepParticles(
   particles: Particle[],
@@ -132,15 +161,23 @@ export function stepParticles(
   height: number,
   obstacle: Box | null,
   dt: number,
-): void {
+): number[] {
   // A backgrounded tab hands back a huge dt on return; a capped step keeps cards from
   // tunnelling clean through the walls.
   const step = Math.min(dt, 1 / 30);
+  const cornerHits: number[] = [];
 
-  for (const p of particles) {
+  for (const [index, p] of particles.entries()) {
     p.x += p.vx * step;
     p.y += p.vy * step;
-    bounceOffWalls(p, width, height);
+
+    const wall = bounceOffWalls(p, width, height);
+    // Both axes turning at once is a dead-centre corner strike; one turning while the
+    // other hugs its wall is close enough to count.
+    if ((wall.turnedX && wall.huggingY) || (wall.turnedY && wall.huggingX)) {
+      cornerHits.push(index);
+    }
+
     if (obstacle) {
       bounceOffObstacle(p, obstacle);
     }
@@ -151,6 +188,8 @@ export function stepParticles(
       collide(particles[i], particles[j]);
     }
   }
+
+  return cornerHits;
 }
 
 /**

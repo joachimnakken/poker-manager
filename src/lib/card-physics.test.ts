@@ -120,3 +120,46 @@ describe("seedParticle", () => {
     assert.deepEqual(a, b);
   });
 });
+
+describe("corner strikes", () => {
+  test("a card driven into the top-left corner reports a hit", () => {
+    const p = card({ x: 66, y: 90, vx: -200, vy: -200 });
+    const hits = stepParticles([p], WIDTH, HEIGHT, null, 1 / 60);
+    assert.deepEqual(hits, [0]);
+  });
+
+  test("all four corners count", () => {
+    const corners: Particle[] = [
+      card({ x: 66, y: 90, vx: -200, vy: -200 }),
+      card({ x: WIDTH - 66, y: 90, vx: 200, vy: -200 }),
+      card({ x: 66, y: HEIGHT - 90, vx: -200, vy: 200 }),
+      card({ x: WIDTH - 66, y: HEIGHT - 90, vx: 200, vy: 200 }),
+    ];
+    for (const p of corners) {
+      assert.deepEqual(stepParticles([p], WIDTH, HEIGHT, null, 1 / 60), [0], "corner missed");
+    }
+  });
+
+  test("a plain side bounce in the middle of a wall is not a corner", () => {
+    const p = card({ x: 66, y: HEIGHT / 2, vx: -200, vy: 0 });
+    assert.deepEqual(stepParticles([p], WIDTH, HEIGHT, null, 1 / 60), []);
+  });
+
+  test("drifting along a wall without turning is not a corner", () => {
+    // Hugging the top wall, moving sideways only: no turn, so no confetti.
+    const p = card({ x: 800, y: 88, vx: 200, vy: 0 });
+    assert.deepEqual(stepParticles([p], WIDTH, HEIGHT, null, 1 / 60), []);
+  });
+
+  test("corners stay rare over a long ordinary run", () => {
+    const cards = Array.from({ length: 11 }, (_, i) =>
+      seedParticle(i, 11, WIDTH, HEIGHT, 128, 176),
+    );
+    let hits = 0;
+    // Ten minutes of wall time at 60fps.
+    for (let frame = 0; frame < 36_000; frame++) {
+      hits += stepParticles(cards, WIDTH, HEIGHT, { left: 700, top: 300, right: 900, bottom: 600 }, 1 / 60).length;
+    }
+    assert.ok(hits < 200, `${hits} corner hits in ten minutes is too many to feel special`);
+  });
+});
