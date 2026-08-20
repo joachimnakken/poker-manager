@@ -32,6 +32,10 @@ export interface Player {
   hasAddon: boolean;
   isActive: boolean;
   finishPosition?: number;
+  /** Last counted stack, if a captain has counted it. */
+  chipCount?: number;
+  /** When it was counted — a count from two breaks ago is not the truth any more. */
+  chipsUpdatedAt?: string;
   knockedOutInLevel?: number;
   knockedOutBy?: string;
 }

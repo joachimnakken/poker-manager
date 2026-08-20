@@ -60,6 +60,12 @@ alter table players add column if not exists
   profile_id uuid references profiles(id) on delete set null;
 create index if not exists players_profile_idx on players(profile_id);
 
+-- Counted stacks. Captains count their own table during a break, which turns the player
+-- list into a live ranking. Nullable because a stack is unknown until someone counts it,
+-- and the timestamp is what makes a count from two breaks ago visibly stale.
+alter table players add column if not exists chip_count int check (chip_count >= 0);
+alter table players add column if not exists chips_updated_at timestamptz;
+
 -- Which player is the host. The host runs the night from their seat, so their player
 -- token carries owner authority; the owner_token device designates them. Declared after
 -- players because it points at one.

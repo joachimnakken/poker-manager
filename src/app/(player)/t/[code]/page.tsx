@@ -7,6 +7,7 @@ import { useClockTick } from "@/store/use-timer";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { clearProfile, getIdentity, getProfile, type StoredProfile } from "@/lib/identity";
 import { didYouMean } from "@/lib/name-match";
+import { bigBlinds, chipRanking, countStatus, isStale } from "@/lib/chips";
 import type { CheckinRequest, StatsResponse } from "@/lib/api";
 import { formatTime, formatChips, getAverageStack, formatCurrency } from "@/lib/tournament-utils";
 import { calculatePayouts, calculateTotalPot } from "@/lib/prize-calculator";
@@ -524,12 +525,17 @@ function FieldPanel({
   title,
   header,
   actionsFor,
+  mayCount,
+  onSetChips,
 }: {
   tournament: Tournament;
   meId?: string;
   title: string;
   header?: React.ReactNode;
   actionsFor?: (player: Player) => React.ReactNode;
+  /** Whether this device may count that player's stack — captains, their own table. */
+  mayCount?: (player: Player) => boolean;
+  onSetChips?: (playerId: string, chips: number | null) => void;
 }) {
   const { players, seatAssignments, tables } = tournament;
   const tableNumbers = [...new Set((seatAssignments ?? []).map((a) => a.table))].sort(
@@ -538,6 +544,22 @@ function FieldPanel({
   const [tab, setTab] = useState("all");
   const active = players.filter((p) => p.isActive);
 
+  const onBreak = tournament.status === "break";
+  // A break is when stacks get counted, so the panel opens in counting mode then.
+  const [counting, setCounting] = useState(onBreak);
+  const lastBreak = useRef(onBreak);
+  useEffect(() => {
+    if (onBreak !== lastBreak.current) {
+      lastBreak.current = onBreak;
+      setCounting(onBreak);
+    }
+  }, [onBreak]);
+
+  const status = countStatus(players, tournament.config);
+  const level = tournament.config.blindStructure[tournament.timer.currentLevelIndex];
+  const canCount = mayCount !== undefined && onSetChips !== undefined;
+  const anyCounted = status.counted > 0;
+
   const seatOf = (playerId: string) => (seatAssignments ?? []).find((a) => a.playerId === playerId);
   const captainOf = (table: number) =>
     tables.find((t) => t.tableNumber === table)?.captainPlayerId;
@@ -545,6 +567,11 @@ function FieldPanel({
   function rowsFor(table: number | null): Player[] {
     const scoped =
       table === null ? players : players.filter((p) => seatOf(p.id)?.table === table);
+    // Once anyone is counted the list is a chip ranking; a table tab stays in seat
+    // order, because that is how you read it against the table in front of you.
+    if (anyCounted && table === null) {
+      return chipRanking(scoped);
+    }
     return [...scoped].sort((a, b) => {
       if (a.isActive !== b.isActive) {
         return a.isActive ? -1 : 1;
@@ -570,11 +597,12 @@ function FieldPanel({
             data-testid={`field-${player.name}`}
             data-player-row={player.name}
             className={cn(
-              "flex items-center gap-2 rounded-md p-2",
+              "rounded-md p-2",
               player.id === meId ? "bg-primary/10" : "bg-muted/30",
               !player.isActive && "opacity-60",
             )}
           >
+            <div className="flex items-center gap-2">
             {table !== null && seat && (
               <span className="w-4 shrink-0 text-xs font-mono text-muted-foreground">
                 {seat.seat}
@@ -619,7 +647,49 @@ function FieldPanel({
               </span>
             ) : null}
 
-            {player.isActive && actionsFor?.(player)}
+            </div>
+
+            {player.isActive && counting && canCount && mayCount!(player) ? (
+              <input
+                type="number"
+                inputMode="numeric"
+                defaultValue={player.chipCount ?? ""}
+                placeholder="chips"
+                data-testid={`chips-${player.name}`}
+                className="mt-1.5 ml-auto block h-7 w-24 rounded border bg-background px-2 text-right text-xs tabular-nums"
+                onBlur={(event) => {
+                  const raw = event.target.value.trim();
+                  const next = raw === "" ? null : Number(raw);
+                  if (next !== (player.chipCount ?? null) && (next === null || next >= 0)) {
+                    onSetChips!(player.id, next);
+                  }
+                }}
+              />
+            ) : (
+              player.isActive &&
+              player.chipCount !== undefined && (
+                <span
+                  className={cn(
+                    "shrink-0 text-right text-xs tabular-nums",
+                    isStale(player, tournament.anchor.levelStartedAt)
+                      ? "text-muted-foreground/60 italic"
+                      : "text-muted-foreground",
+                  )}
+                  data-testid={`stack-${player.name}`}
+                >
+                  {player.chipCount.toLocaleString()}
+                  {bigBlinds(player.chipCount, level) !== null && (
+                    <span className="ml-1 opacity-70">
+                      ({bigBlinds(player.chipCount, level)}bb)
+                    </span>
+                  )}
+                </span>
+              )
+            )}
+
+            {player.isActive && !counting && actionsFor && (
+              <div className="mt-1.5 flex justify-end">{actionsFor(player)}</div>
+            )}
           </div>
         );
       })}
@@ -630,13 +700,37 @@ function FieldPanel({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-base">{title}</CardTitle>
-        {header ?? (
-          <span className="text-xs text-muted-foreground">
-            {active.length}/{players.length} left
-          </span>
+        {canCount ? (
+          <button
+            onClick={() => setCounting((on) => !on)}
+            data-testid="toggle-counting"
+            className={cn(
+              "rounded-full border px-2.5 py-1 text-xs",
+              counting ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground",
+            )}
+          >
+            {counting ? `Counting ${status.counted}/${status.active}` : "Count stacks"}
+          </button>
+        ) : (
+          header ?? (
+            <span className="text-xs text-muted-foreground">
+              {active.length}/{players.length} left
+            </span>
+          )
         )}
       </CardHeader>
       <CardContent>
+        {status.mismatch && (
+          <div
+            className="mb-3 rounded-md border border-amber-500/50 bg-amber-500/10 p-2 text-xs"
+            data-testid="chip-mismatch"
+          >
+            Counted {status.countedChips.toLocaleString()} against{" "}
+            {status.expectedChips.toLocaleString()} in play —{" "}
+            {status.difference > 0 ? "+" : ""}
+            {status.difference.toLocaleString()} out. Someone has been miscounted.
+          </div>
+        )}
         {tableNumbers.length > 1 ? (
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList className="w-full">
@@ -738,6 +832,7 @@ function InPlay({
   const registerRebuy = useTournamentStore((s) => s.registerRebuy);
   const registerAddon = useTournamentStore((s) => s.registerAddon);
   const announceAllIn = useTournamentStore((s) => s.announceAllIn);
+  const setChips = useTournamentStore((s) => s.setChips);
   const [koTarget, setKoTarget] = useState<string | null>(null);
 
   const captainId =
@@ -802,6 +897,11 @@ function InPlay({
             </span>
           )
         }
+        mayCount={(player) => {
+          const seat = (tournament.seatAssignments ?? []).find((a) => a.playerId === player.id);
+          return isHost || (amCaptain && seat?.table === tableNumber);
+        }}
+        onSetChips={(playerId, chips) => setChips(code, playerId, chips)}
         actionsFor={(player) => {
           // The host may act on anyone; a captain only on their own table. The server
           // enforces the same rule, so this is about not offering a button that 403s.

@@ -28,4 +28,6 @@ export type Action =
   /** Which player the host is sitting as. Their token then carries owner authority. */
   | { type: "set-host-player"; playerId: string | null }
   /** Shout it to the room: this player is all in. */
-  | { type: "announce-all-in"; playerId: string };
+  | { type: "announce-all-in"; playerId: string }
+  /** A counted stack. Null clears it. */
+  | { type: "set-chips"; playerId: string; chips: number | null };

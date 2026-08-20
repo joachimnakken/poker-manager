@@ -40,6 +40,8 @@ interface PlayerRow {
   has_addon: boolean;
   is_active: boolean;
   finish_position: number | null;
+  chip_count: number | null;
+  chips_updated_at: Date | null;
   knocked_out_in_level: number | null;
   knocked_out_by: string | null;
 }
@@ -117,6 +119,8 @@ function toPlayer(row: PlayerRow): Player {
     hasAddon: row.has_addon,
     isActive: row.is_active,
     finishPosition: row.finish_position ?? undefined,
+    chipCount: row.chip_count ?? undefined,
+    chipsUpdatedAt: row.chips_updated_at?.toISOString() ?? undefined,
     knockedOutInLevel: row.knocked_out_in_level ?? undefined,
     knockedOutBy: row.knocked_out_by ?? undefined,
   };
@@ -231,7 +235,7 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
   const [players, tables, seats, knockouts, announcements, proposals] = await Promise.all([
     query<PlayerRow>(
       `select id, tournament_id, name, profile_id, rebuys, has_addon, is_active, finish_position,
-              knocked_out_in_level, knocked_out_by
+              chip_count, chips_updated_at, knocked_out_in_level, knocked_out_by
        from players where tournament_id = any($1) order by checked_in_at, id`,
       [ids],
     ),

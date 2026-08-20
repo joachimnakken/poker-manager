@@ -787,6 +787,21 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
       return;
     }
 
+    case "set-chips": {
+      await requireAuthorityOver(actor, context, action.playerId);
+      if (action.chips !== null && (!Number.isInteger(action.chips) || action.chips < 0)) {
+        throw new ActionError("A stack is a whole number of chips", 400);
+      }
+      await query(
+        `update players
+         set chip_count = $3,
+             chips_updated_at = case when $3::int is null then null else now() end
+         where tournament_id = $1 and id = $2`,
+        [id, action.playerId, action.chips],
+      );
+      return;
+    }
+
     case "announce-all-in": {
       await requireAuthorityOver(actor, context, action.playerId);
       // A double tap should not flash twice; the same player being all in again inside

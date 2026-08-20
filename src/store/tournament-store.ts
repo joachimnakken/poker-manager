@@ -69,6 +69,7 @@ interface TournamentState {
   ) => Promise<void>;
   setHostPlayer: (tournamentId: string, playerId: string | null) => Promise<void>;
   announceAllIn: (tournamentId: string, playerId: string) => Promise<void>;
+  setChips: (tournamentId: string, playerId: string, chips: number | null) => Promise<void>;
 
   movePlayer: (
     tournamentId: string,
@@ -291,6 +292,8 @@ export const useTournamentStore = create<TournamentState>()((set, get) => {
     setHostPlayer: (tournamentId, playerId) => act(tournamentId, { type: "set-host-player", playerId }),
     announceAllIn: (tournamentId, playerId) =>
       act(tournamentId, { type: "announce-all-in", playerId }),
+    setChips: (tournamentId, playerId, chips) =>
+      act(tournamentId, { type: "set-chips", playerId, chips }),
 
     movePlayer: (tournamentId, playerId, toTable, toSeat) =>
       act(tournamentId, { type: "move-player", playerId, toTable, toSeat }),
