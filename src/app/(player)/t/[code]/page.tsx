@@ -204,7 +204,7 @@ function Shell({
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-lg font-bold truncate">{name ?? "Poker"}</h1>
+            <h1 className="text-lg font-bold truncate">{name ?? "Cheffeloker"}</h1>
             {isHost && (
               <Badge variant="default" className="shrink-0 text-[10px]" data-testid="host-badge">
                 HOST

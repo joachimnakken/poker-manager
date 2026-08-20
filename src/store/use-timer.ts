@@ -59,7 +59,7 @@ export function useTimer(tournamentId: string) {
   // Update browser tab title
   useEffect(() => {
     if (!tournament || tournament.status === "setup" || tournament.status === "finished") {
-      document.title = "Poker Tournament Manager";
+      document.title = "Cheffeloker Tournament Manager";
       return;
     }
 
@@ -70,9 +70,9 @@ export function useTimer(tournamentId: string) {
     const timeStr = `${mins}:${secs.toString().padStart(2, "0")}`;
 
     if (level?.isBreak) {
-      document.title = `BREAK ${timeStr} - Poker`;
+      document.title = `BREAK ${timeStr} - Cheffeloker`;
     } else {
-      document.title = `${level?.smallBlind}/${level?.bigBlind} ${timeStr} - Poker`;
+      document.title = `${level?.smallBlind}/${level?.bigBlind} ${timeStr} - Cheffeloker`;
     }
   }, [tournament?.timer.secondsRemaining, tournament?.timer.currentLevelIndex, tournament?.status]);
 }

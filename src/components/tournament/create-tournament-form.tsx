@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTournamentStore } from "@/store/tournament-store";
 
 function getDefaultName() {
-  return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " Poker Night";
+  return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " Cheffeloker Night";
 }
 
 export function CreateTournamentForm() {

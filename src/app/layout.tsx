@@ -14,12 +14,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Poker Tournament Manager",
+  title: "Cheffeloker Tournament Manager",
   description: "Manage your home poker tournaments",
   // iOS ignores most of the manifest, so the home-screen behaviour is declared here.
   appleWebApp: {
     capable: true,
-    title: "Poker",
+    title: "Cheffeloker",
     statusBarStyle: "black-translucent",
   },
   icons: {

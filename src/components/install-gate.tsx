@@ -39,10 +39,13 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
   const [platform, setPlatform] = useState<Platform | null>(null);
   const [installed, setInstalled] = useState(false);
   const [event, setEvent] = useState<InstallEvent | null>(null);
+  const [url, setUrl] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setInstalled(isStandalone());
     setPlatform(detect());
+    setUrl(window.location.href);
 
     const onPrompt = (e: Event) => {
       e.preventDefault();
@@ -69,7 +72,7 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
       <div className="space-y-1 text-center">
-        <h1 className="text-2xl font-bold">Add Poker to your home screen</h1>
+        <h1 className="text-2xl font-bold">Add Cheffeloker to your home screen</h1>
         <p className="text-sm text-muted-foreground">
           The table, your seat and the clock live in the app. It takes a few seconds.
         </p>
@@ -97,7 +100,7 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
                 steps={[
                   "Open the ⋮ menu, top right",
                   "Tap “Add to Home screen” or “Install app”",
-                  "Confirm, then open Poker from your home screen",
+                  "Confirm, then open Cheffeloker from your home screen",
                 ]}
               />
             )}
@@ -112,7 +115,7 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
               steps={[
                 "Tap the Share button at the bottom of Safari — the square with an arrow",
                 "Scroll down and tap “Add to Home Screen”",
-                "Tap Add, then open Poker from your home screen",
+                "Tap Add, then open Cheffeloker from your home screen",
               ]}
             />
           </CardContent>
@@ -121,12 +124,30 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
 
       {platform === "ios-other" && (
         <Card>
-          <CardContent className="space-y-2 py-4">
+          <CardContent className="space-y-3 py-4">
             <p className="text-sm font-medium">Open this page in Safari first</p>
             <p className="text-sm text-muted-foreground">
               On iPhone only Safari can add an app to the home screen. Copy this address
               into Safari, then use Share → Add to Home Screen.
             </p>
+            <p className="select-all break-all rounded-md bg-muted px-3 py-2 font-mono text-xs">
+              {url}
+            </p>
+            <Button
+              variant="secondary"
+              className="w-full"
+              data-testid="copy-url"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(url);
+                  setCopied(true);
+                } catch {
+                  // No clipboard API in some in-app browsers — the address above is selectable.
+                }
+              }}
+            >
+              {copied ? "Copied — now paste it in Safari" : "Copy address"}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -138,7 +159,7 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
               steps={[
                 "Open your browser's menu",
                 "Look for “Install app” or “Add to Home screen”",
-                "Open Poker from your home screen afterwards",
+                "Open Cheffeloker from your home screen afterwards",
               ]}
             />
           </CardContent>
@@ -146,7 +167,7 @@ export function InstallGate({ children }: { children: React.ReactNode }) {
       )}
 
       <p className="text-center text-xs text-muted-foreground">
-        Already added it? Open Poker from your home screen rather than the browser.
+        Already added it? Open Cheffeloker from your home screen rather than the browser.
       </p>
     </div>
   );

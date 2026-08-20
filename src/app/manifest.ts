@@ -7,8 +7,8 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Poker Night",
-    short_name: "Poker",
+    name: "Cheffeloker Night",
+    short_name: "Cheffeloker",
     description: "Your seat, the clock, and the table you are sitting at",
     start_url: "/play",
     scope: "/",

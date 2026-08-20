@@ -32,7 +32,7 @@ export default function HomePage() {
       <div className="max-w-2xl mx-auto space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold tracking-tight">
-            Poker Tournament Manager
+            Cheffeloker Tournament Manager
           </h1>
           <p className="text-muted-foreground">
             Manage blinds, players, and payouts for your home games
