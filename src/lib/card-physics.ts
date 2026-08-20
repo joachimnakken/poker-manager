@@ -16,6 +16,11 @@ export interface Particle {
   vy: number;
   width: number;
   height: number;
+  /**
+   * Held by a finger or a cursor. A held card is driven by the pointer rather than by
+   * the simulation, and behaves like a moving wall: it shoves others and is not shoved.
+   */
+  held?: boolean;
 }
 
 export interface Box {
@@ -132,11 +137,34 @@ function collide(a: Particle, b: Particle): void {
   if (!overlap(boxA, boxB)) {
     return;
   }
+  if (a.held && b.held) {
+    return;
+  }
 
   const overlapX = Math.min(boxA.right, boxB.right) - Math.max(boxA.left, boxB.left);
   const overlapY = Math.min(boxA.bottom, boxB.bottom) - Math.max(boxA.top, boxB.top);
+  const onX = overlapX < overlapY;
 
-  if (overlapX < overlapY) {
+  // A held card does not move and does not take on the other's velocity: it pushes the
+  // loose one clear and hands over some of its own motion, so shoving a card across the
+  // wall with your finger actually knocks the others about.
+  if (a.held || b.held) {
+    const held = a.held ? a : b;
+    const loose = a.held ? b : a;
+    const depth = onX ? overlapX : overlapY;
+    if (onX) {
+      const away = loose.x < held.x ? -1 : 1;
+      loose.x += depth * away;
+      loose.vx = Math.abs(loose.vx) * away + held.vx * 0.6;
+    } else {
+      const away = loose.y < held.y ? -1 : 1;
+      loose.y += depth * away;
+      loose.vy = Math.abs(loose.vy) * away + held.vy * 0.6;
+    }
+    return;
+  }
+
+  if (onX) {
     const push = (overlapX / 2) * (a.x < b.x ? -1 : 1);
     a.x += push;
     b.x -= push;
@@ -168,18 +196,26 @@ export function stepParticles(
   const cornerHits: number[] = [];
 
   for (const [index, p] of particles.entries()) {
+    // A held card is wherever the pointer put it; the simulation does not move it, and
+    // it cannot set off the corner easter egg by being dragged into one.
+    if (p.held) {
+      continue;
+    }
     p.x += p.vx * step;
     p.y += p.vy * step;
 
+    if (obstacle) {
+      bounceOffObstacle(p, obstacle);
+    }
+
+    // The walls are resolved last and win. Ejecting a card from the obstacle moves it
+    // without regard for the edges, and the QR sits close enough to the bottom that
+    // "push it out downwards" would otherwise put a card off screen.
     const wall = bounceOffWalls(p, width, height);
     // Both axes turning at once is a dead-centre corner strike; one turning while the
     // other hugs its wall is close enough to count.
     if ((wall.turnedX && wall.huggingY) || (wall.turnedY && wall.huggingX)) {
       cornerHits.push(index);
-    }
-
-    if (obstacle) {
-      bounceOffObstacle(p, obstacle);
     }
   }
 
@@ -187,6 +223,26 @@ export function stepParticles(
     for (let j = i + 1; j < particles.length; j++) {
       collide(particles[i], particles[j]);
     }
+  }
+
+  // Collisions resolve after the walls, so a card shoved at an edge - by another card,
+  // or by one being dragged - can end the frame outside. Put everyone back inside before
+  // anything is drawn. No corner reporting here: being shunted into a corner by someone
+  // else's shove should not set off the confetti.
+  for (const p of particles) {
+    if (p.held) {
+      // A held card is kept on screen too, but position only: its velocity belongs to
+      // the pointer, and reversing it would fight the drag. It may pass over the QR
+      // while being carried; the simulation ejects it once let go.
+      p.x = Math.min(width - p.width / 2, Math.max(p.width / 2, p.x));
+      p.y = Math.min(height - p.height / 2, Math.max(p.height / 2, p.y));
+      continue;
+    }
+    // Obstacle first, walls last, for the same reason as above.
+    if (obstacle) {
+      bounceOffObstacle(p, obstacle);
+    }
+    bounceOffWalls(p, width, height);
   }
 
   return cornerHits;
