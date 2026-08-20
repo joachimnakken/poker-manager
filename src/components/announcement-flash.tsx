@@ -5,6 +5,7 @@ import { flashText, nextFlash } from "@/lib/announcements";
 import { playLevelChangeSound } from "@/lib/sounds";
 import type { Announcement } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { Avatar } from "@/components/avatar";
 
 const SHOW_MS = 2600;
 
@@ -71,15 +72,27 @@ export function AnnouncementFlash({
         )}
         style={{ animation: "flash-pulse 2.6s ease-out" }}
       />
-      <p
-        className={cn(
-          "relative text-center font-bold uppercase leading-tight tracking-wide text-white",
-          size === "wall" ? "text-8xl" : "text-4xl",
-        )}
-        style={{ textShadow: "0 4px 24px rgba(0,0,0,0.55)" }}
-      >
-        {flashText(showing)}
-      </p>
+      <div className="relative flex flex-col items-center gap-6">
+        {/* Their face, as big as the screen allows. Most people skip the photo, so the
+            Avatar falls back to initials rather than leaving a hole. */}
+        <Avatar
+          profileId={showing.profileId}
+          name={showing.playerName}
+          className={cn(
+            "ring-4 ring-white/80 shadow-2xl",
+            size === "wall" ? "h-72 w-72 text-8xl" : "h-40 w-40 text-5xl",
+          )}
+        />
+        <p
+          className={cn(
+            "text-center font-bold uppercase leading-tight tracking-wide text-white",
+            size === "wall" ? "text-7xl" : "text-3xl",
+          )}
+          style={{ textShadow: "0 4px 24px rgba(0,0,0,0.55)" }}
+        >
+          {flashText(showing)}
+        </p>
+      </div>
     </div>
   );
 }

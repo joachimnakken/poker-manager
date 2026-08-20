@@ -187,6 +187,7 @@ function assemble(
       kind: "all-in" as const,
       playerId: row.player_id,
       playerName: named.get(row.player_id)?.name ?? "Someone",
+      profileId: named.get(row.player_id)?.profile_id ?? undefined,
       at: row.created_at.toISOString(),
     })),
     ...knockouts
@@ -196,6 +197,7 @@ function assemble(
         kind: "eliminated" as const,
         playerId: row.player_id,
         playerName: named.get(row.player_id)?.name ?? "Someone",
+        profileId: named.get(row.player_id)?.profile_id ?? undefined,
         at: row.created_at.toISOString(),
         finishPosition: named.get(row.player_id)?.finish_position ?? undefined,
       })),

@@ -85,6 +85,8 @@ export interface Announcement {
   kind: "all-in" | "eliminated";
   playerId: string;
   playerName: string;
+  /** For their photo on the flash; absent if they never took one. */
+  profileId?: string;
   /** ISO timestamp, for ordering and for judging freshness. */
   at: string;
   /** Finishing place, on eliminations. */
