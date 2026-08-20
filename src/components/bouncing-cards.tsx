@@ -23,10 +23,13 @@ const RETURN_MS = 500;
 export function BouncingCards({
   names,
   cards,
+  profiles,
   obstacleRef,
 }: {
   names: string[];
   cards: Map<string, string>;
+  /** Profile per name, so a card can carry the player's photo. */
+  profiles?: Map<string, string>;
   /** The join-QR card. Cards bounce off it, so it is never covered. */
   obstacleRef: React.RefObject<HTMLElement | null>;
 }) {
@@ -161,7 +164,11 @@ export function BouncingCards({
           )}
           style={{ animation: "projector-fade-in 1.2s ease-out" }}
         >
-          <NameCard name={name} notation={cards.get(name) ?? "2s"} />
+          <NameCard
+            name={name}
+            notation={cards.get(name) ?? "2s"}
+            profileId={profiles?.get(name)}
+          />
         </div>
       ))}
     </div>
@@ -211,7 +218,15 @@ function drawConfetti(
  * `assignCards` — so an ace on the wall is a signature rather than a coincidence, and
  * gets a gold edge to match.
  */
-function NameCard({ name, notation }: { name: string; notation: string }) {
+function NameCard({
+  name,
+  notation,
+  profileId,
+}: {
+  name: string;
+  notation: string;
+  profileId?: string;
+}) {
   const card = parseCard(notation);
   const rank = notation[0].toUpperCase() === "T" ? "10" : notation[0].toUpperCase();
   const red = card.suit === "h" || card.suit === "d";
@@ -232,8 +247,23 @@ function NameCard({ name, notation }: { name: string; notation: string }) {
         <span className="text-xl">{SUIT_GLYPHS[card.suit]}</span>
       </div>
 
-      <div className="px-0.5 text-center text-base font-semibold leading-tight text-zinc-900 break-words">
-        {name}
+      <div className="flex flex-col items-center gap-1 px-0.5">
+        {profileId && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/profiles/${profileId}/avatar`}
+            alt=""
+            className="h-12 w-12 rounded-full object-cover"
+            // Most people will have skipped the photo; a broken-image icon on the wall
+            // would be worse than none.
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        )}
+        <span className="text-center text-sm font-semibold leading-tight text-zinc-900 break-words">
+          {name}
+        </span>
       </div>
 
       <div

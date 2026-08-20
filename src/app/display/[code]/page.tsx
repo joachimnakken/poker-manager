@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { assignCards } from "@/lib/name-cards";
 import { BouncingCards } from "@/components/bouncing-cards";
 import { AnnouncementFlash } from "@/components/announcement-flash";
+import { bigBlinds, chipRanking, countStatus } from "@/lib/chips";
 import type { Tournament } from "@/lib/types";
 
 /**
@@ -163,8 +164,77 @@ export default function DisplayPage({ params }: { params: Promise<{ code: string
         </div>
       </div>
 
-      {tableNumbers.length > 0 && (
-        <SeatChart tournament={tournament} theme={theme} showRemaining />
+      {status === "break" && countStatus(players, config).counted > 0 ? (
+        <ChipBoard tournament={tournament} theme={theme} />
+      ) : (
+        tableNumbers.length > 0 && (
+          <SeatChart tournament={tournament} theme={theme} showRemaining />
+        )
+      )}
+    </div>
+  );
+}
+
+/**
+ * The break-time chip count, sized for the room. Only shown while the field is on a
+ * break — that is when the captains have just counted, and when everyone actually wants
+ * to know where they stand.
+ */
+function ChipBoard({ tournament, theme }: { tournament: Tournament; theme: Theme }) {
+  const { players, config, timer } = tournament;
+  const level = config.blindStructure[timer.currentLevelIndex];
+  // A break has no blinds of its own, so stacks are read against the level resuming.
+  const next = config.blindStructure
+    .slice(timer.currentLevelIndex)
+    .find((entry) => !entry.isBreak);
+  const ranked = chipRanking(players).filter((player) => player.isActive);
+  const status = countStatus(players, config);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-4xl font-semibold">Chip count</span>
+        <span className={cn("text-2xl", theme.muted)}>
+          {status.missing > 0
+            ? `${status.counted} of ${status.active} counted`
+            : `${status.countedChips.toLocaleString()} in play`}
+        </span>
+      </div>
+
+      <div
+        className="grid gap-x-10 gap-y-2"
+        style={{ gridTemplateColumns: `repeat(${ranked.length > 8 ? 2 : 1}, minmax(0, 1fr))` }}
+      >
+        {ranked.map((player, index) => (
+          <div
+            key={player.id}
+            className={cn("flex items-baseline gap-4 text-3xl", theme.tableCard, "rounded-xl px-4 py-2")}
+          >
+            <span className={cn("w-8 font-mono", theme.seatNumber)}>{index + 1}</span>
+            <span className="flex-1 truncate">{player.name}</span>
+            {player.chipCount === undefined ? (
+              <span className={cn("text-2xl", theme.muted)}>not counted</span>
+            ) : (
+              <>
+                <span className="font-semibold tabular-nums">
+                  {player.chipCount.toLocaleString()}
+                </span>
+                {bigBlinds(player.chipCount, next) !== null && (
+                  <span className={cn("w-24 text-right text-2xl tabular-nums", theme.levelLabel)}>
+                    {bigBlinds(player.chipCount, next)}bb
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {status.mismatch && (
+        <p className={cn("text-2xl", theme.critical)}>
+          Counted {status.countedChips.toLocaleString()} against{" "}
+          {status.expectedChips.toLocaleString()} in play — recount needed.
+        </p>
       )}
     </div>
   );
@@ -282,6 +352,11 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
   const floating = names.slice(0, MAX_FLOATING_CARDS);
   const overflow = names.length - floating.length;
   const cards = assignCards(floating);
+  const profiles = new Map(
+    tournament.players
+      .filter((player) => player.profileId !== undefined)
+      .map((player) => [player.name, player.profileId!]),
+  );
   const qrRef = useRef<HTMLDivElement>(null);
 
   // Once the host draws, the wall's job changes from "join" to "find your chair", so the
@@ -325,7 +400,7 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
         theme.prestartBg,
       )}
     >
-      <BouncingCards names={floating} cards={cards} obstacleRef={qrRef} />
+      <BouncingCards names={floating} cards={cards} profiles={profiles} obstacleRef={qrRef} />
 
       <div ref={qrRef} className="relative flex flex-col items-center gap-6">
         <div
