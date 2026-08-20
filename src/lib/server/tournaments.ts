@@ -36,6 +36,7 @@ interface PlayerRow {
   tournament_id: string;
   name: string;
   profile_id: string | null;
+  has_avatar: boolean;
   rebuys: number;
   has_addon: boolean;
   is_active: boolean;
@@ -115,6 +116,7 @@ function toPlayer(row: PlayerRow): Player {
     id: row.id,
     name: row.name,
     profileId: row.profile_id ?? undefined,
+    hasAvatar: row.has_avatar === true,
     rebuys: row.rebuys,
     hasAddon: row.has_addon,
     isActive: row.is_active,
@@ -188,6 +190,7 @@ function assemble(
       playerId: row.player_id,
       playerName: named.get(row.player_id)?.name ?? "Someone",
       profileId: named.get(row.player_id)?.profile_id ?? undefined,
+      hasAvatar: named.get(row.player_id)?.has_avatar === true,
       at: row.created_at.toISOString(),
     })),
     ...knockouts
@@ -198,6 +201,7 @@ function assemble(
         playerId: row.player_id,
         playerName: named.get(row.player_id)?.name ?? "Someone",
         profileId: named.get(row.player_id)?.profile_id ?? undefined,
+        hasAvatar: named.get(row.player_id)?.has_avatar === true,
         at: row.created_at.toISOString(),
         finishPosition: named.get(row.player_id)?.finish_position ?? undefined,
       })),
@@ -236,9 +240,13 @@ async function hydrate(rows: TournamentRow[]): Promise<Tournament[]> {
 
   const [players, tables, seats, knockouts, announcements, proposals] = await Promise.all([
     query<PlayerRow>(
-      `select id, tournament_id, name, profile_id, rebuys, has_addon, is_active, finish_position,
-              chip_count, chips_updated_at, knocked_out_in_level, knocked_out_by
-       from players where tournament_id = any($1) order by checked_in_at, id`,
+      `select p.id, p.tournament_id, p.name, p.profile_id, p.rebuys, p.has_addon, p.is_active,
+              p.finish_position, p.chip_count, p.chips_updated_at, p.knocked_out_in_level,
+              p.knocked_out_by,
+              (pr.avatar is not null) as has_avatar
+       from players p
+       left join profiles pr on pr.id = p.profile_id
+       where p.tournament_id = any($1) order by p.checked_in_at, p.id`,
       [ids],
     ),
     query<TableRow>(

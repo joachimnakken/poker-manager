@@ -78,6 +78,7 @@ export function AnnouncementFlash({
         <Avatar
           profileId={showing.profileId}
           name={showing.playerName}
+          hasAvatar={showing.hasAvatar}
           className={cn(
             "ring-4 ring-white/80 shadow-2xl",
             size === "wall" ? "h-72 w-72 text-8xl" : "h-40 w-40 text-5xl",

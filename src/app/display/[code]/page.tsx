@@ -354,7 +354,7 @@ function PreStart({ tournament, theme }: { tournament: Tournament; theme: Theme 
   const cards = assignCards(floating);
   const profiles = new Map(
     tournament.players
-      .filter((player) => player.profileId !== undefined)
+      .filter((player) => player.profileId !== undefined && player.hasAvatar === true)
       .map((player) => [player.name, player.profileId!]),
   );
   const qrRef = useRef<HTMLDivElement>(null);

@@ -7,10 +7,17 @@ import { cn } from "@/lib/utils";
 export function Avatar({
   profileId,
   name,
+  hasAvatar = true,
   className,
 }: {
   profileId?: string;
   name: string;
+  /**
+   * Whether a photo exists yet. Passing it means the element is created the poll after
+   * one appears; without it a card drawn before the photo existed would 404 once, hide
+   * itself and never look again.
+   */
+  hasAvatar?: boolean;
   className?: string;
 }) {
   const initials = name
@@ -30,7 +37,7 @@ export function Avatar({
       {/* Initials sit underneath; the photo covers them once it loads, and uncovers
           them again if there is none. */}
       <span>{initials}</span>
-      {profileId ? (
+      {profileId && hasAvatar ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={`/api/profiles/${profileId}/avatar`}

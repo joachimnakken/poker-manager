@@ -28,6 +28,8 @@ export interface Player {
   name: string;
   /** The person behind this seat, for the avatar endpoint and career stats. */
   profileId?: string;
+  /** Whether they have a photo yet. False until they take one, which may be later. */
+  hasAvatar?: boolean;
   rebuys: number;
   hasAddon: boolean;
   isActive: boolean;
@@ -87,6 +89,7 @@ export interface Announcement {
   playerName: string;
   /** For their photo on the flash; absent if they never took one. */
   profileId?: string;
+  hasAvatar?: boolean;
   /** ISO timestamp, for ordering and for judging freshness. */
   at: string;
   /** Finishing place, on eliminations. */

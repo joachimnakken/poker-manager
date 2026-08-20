@@ -608,7 +608,12 @@ function FieldPanel({
                 {seat.seat}
               </span>
             )}
-            <Avatar profileId={player.profileId} name={player.name} className="h-7 w-7" />
+            <Avatar
+              profileId={player.profileId}
+              name={player.name}
+              hasAvatar={player.hasAvatar}
+              className="h-7 w-7"
+            />
             <span
               className={cn(
                 "flex-1 truncate text-sm font-medium",
