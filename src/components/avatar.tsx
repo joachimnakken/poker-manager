@@ -42,7 +42,8 @@ export function Avatar({
         <img
           src={`/api/profiles/${profileId}/avatar`}
           alt=""
-          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+          className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover"
           onError={(event) => {
             event.currentTarget.style.display = "none";
           }}

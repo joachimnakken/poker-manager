@@ -355,7 +355,8 @@ function NameCard({
           <img
             src={`/api/profiles/${profileId}/avatar`}
             alt=""
-            className="h-[3.6rem] w-[3.6rem] rounded-full object-cover"
+            draggable={false}
+            className="pointer-events-none h-[3.6rem] w-[3.6rem] select-none rounded-full object-cover"
             // Most people will have skipped the photo; a broken-image icon on the wall
             // would be worse than none.
             onError={(event) => {

@@ -143,6 +143,13 @@ body {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1.5rem);
 }
 
+/* Nothing in this app wants the browser's own image drag: on the projector it ran off
+   with a ghost of the photo instead of picking the card up. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
