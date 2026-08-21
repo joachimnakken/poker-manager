@@ -8,6 +8,7 @@ import { PlayingCard } from "@/components/playing-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PlayerBack } from "@/components/player-back";
 
 const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
 const SUITS: Suit[] = ["s", "h", "d", "c"];
@@ -74,6 +75,7 @@ export default function ShowdownPage() {
 
   return (
     <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
+      <PlayerBack />
       <div>
         <h1 className="text-2xl font-bold">Settle a showdown</h1>
       </div>

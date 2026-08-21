@@ -16,6 +16,7 @@ import { SelfieCapture } from "@/components/selfie-capture";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PlayerBack } from "@/components/player-back";
 
 interface NightPlayed {
   code: string;
@@ -79,6 +80,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
+        <PlayerBack />
         <h1 className="text-2xl font-bold">Profile</h1>
         <p className="text-sm text-muted-foreground">
           Check in to a tournament first — that is what creates your profile.
@@ -125,6 +127,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
+      <PlayerBack />
       <h1 className="text-2xl font-bold">Profile</h1>
 
       {taking ? (

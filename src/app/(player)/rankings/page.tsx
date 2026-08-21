@@ -2,6 +2,7 @@ import Link from "next/link";
 import { HAND_RANKINGS } from "@/lib/poker-hands";
 import { PlayingCard } from "@/components/playing-card";
 import { Card, CardContent } from "@/components/ui/card";
+import { PlayerBack } from "@/components/player-back";
 
 export const metadata = { title: "Poker hand rankings" };
 
@@ -9,6 +10,7 @@ export const metadata = { title: "Poker hand rankings" };
 export default function RankingsPage() {
   return (
     <div className="min-h-screen px-4 pt-safe pb-safe max-w-md mx-auto space-y-4">
+      <PlayerBack />
       <div>
         <h1 className="text-2xl font-bold">Hand rankings</h1>
       </div>

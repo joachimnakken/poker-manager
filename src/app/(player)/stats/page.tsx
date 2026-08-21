@@ -5,6 +5,7 @@ import type { ProfileStats, StatsResponse } from "@/lib/api";
 import { formatCurrency } from "@/lib/tournament-utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { PlayerBack } from "@/components/player-back";
 
 export default function StatsPage() {
   const [leaderboard, setLeaderboard] = useState<ProfileStats[] | null>(null);
@@ -27,6 +28,7 @@ export default function StatsPage() {
 
   return (
     <div className="min-h-screen px-4 pt-safe pb-safe max-w-2xl mx-auto space-y-4">
+      <PlayerBack />
       <div>
         <h1 className="text-2xl font-bold">Career stats</h1>
       </div>
