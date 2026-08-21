@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { BlindLevel, TournamentConfig } from "@/lib/types";
 import { DEFAULT_BLIND_STRUCTURE } from "@/lib/constants";
+import { resolveTargetFinish, targetFinishInputValue } from "@/lib/pacing";
 import { useHostGuard } from "@/hooks/use-host-guard";
 
 export default function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -135,6 +136,21 @@ export default function SettingsPage({ params }: { params: Promise<{ id: string 
                   onBlur={() => commit()}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Finish by</Label>
+              <Input
+                type="time"
+                data-testid="target-finish"
+                value={targetFinishInputValue(draft.targetFinishAt)}
+                onChange={(e) =>
+                  commit({ targetFinishAt: resolveTargetFinish(e.target.value) })
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Once the first break is behind you, the host page says so if the night is
+                projected to run past this. Leave it empty to never be told.
+              </p>
             </div>
           </CardContent>
         </Card>

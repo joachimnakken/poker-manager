@@ -472,7 +472,7 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
       await query(
         `update tournaments
          set status = $2, current_level_index = 0, level_started_at = now(),
-             paused_at = null, paused_ms = 0
+             paused_at = null, paused_ms = 0, started_at = now()
          where id = $1`,
         [id, statusForLevel(config, 0, true)],
       );
@@ -539,7 +539,7 @@ export async function applyAction(code: string, actor: Actor, action: Action): P
         await client.query(
           `update tournaments
            set status = 'setup', current_level_index = 0, level_started_at = null,
-               paused_at = null, paused_ms = 0
+               paused_at = null, paused_ms = 0, started_at = null
            where id = $1`,
           [id],
         );

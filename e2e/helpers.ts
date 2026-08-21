@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { Client } from "pg";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 export interface Device {
@@ -124,6 +127,41 @@ export function freeSeatAt(isFree: (seat: number) => boolean): number {
     }
   }
   throw new Error("no free seat at that table — raise SEATS_PER_TABLE in the fixture");
+}
+
+function databaseUrl(): string {
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+  const line = readFileSync(join(process.cwd(), ".env.local"), "utf8")
+    .split("\n")
+    .find((entry) => entry.startsWith("DATABASE_URL="));
+  if (!line) {
+    throw new Error("DATABASE_URL is not set and .env.local has none");
+  }
+  return line.slice("DATABASE_URL=".length).replace(/^"|"$/g, "");
+}
+
+/**
+ * Ages a running tournament by moving its start timestamp back. The pace nudge stays quiet
+ * for the first half hour of play — deliberately, since a rate read off three minutes is
+ * meaningless — and a spec cannot wait, so this is the one thing it reaches into the
+ * database for. Everything else goes through the API.
+ */
+export async function backdateStart(code: string, ms: number): Promise<void> {
+  const client = new Client({ connectionString: databaseUrl() });
+  await client.connect();
+  try {
+    const { rowCount } = await client.query(
+      `update tournaments
+       set started_at = started_at - ($2 || ' milliseconds')::interval
+       where code = $1 and started_at is not null`,
+      [code, String(ms)],
+    );
+    expect(rowCount, `no started tournament with code ${code} to age`).toBe(1);
+  } finally {
+    await client.end();
+  }
 }
 
 export async function deleteTournament(page: Page, code: string): Promise<void> {

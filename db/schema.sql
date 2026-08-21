@@ -72,6 +72,12 @@ alter table players add column if not exists chips_updated_at timestamptz;
 alter table tournaments add column if not exists
   host_player_id uuid references players(id) on delete set null;
 
+-- When the first hand was actually dealt. The clock anchor cannot answer this:
+-- level_started_at is rewritten on every level change, and created_at is when the row
+-- was made, which can be an hour before anyone sat down. Pace projection needs elapsed
+-- play, so it needs this.
+alter table tournaments add column if not exists started_at timestamptz;
+
 create table if not exists tables (
   tournament_id     uuid not null references tournaments(id) on delete cascade,
   table_number      int  not null,

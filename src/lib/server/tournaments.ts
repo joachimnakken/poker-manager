@@ -25,6 +25,7 @@ interface TournamentRow {
   seats_per_table: number;
   current_level_index: number;
   level_started_at: Date | null;
+  started_at: Date | null;
   paused_at: Date | null;
   paused_ms: string;
   owner_token: string;
@@ -94,7 +95,8 @@ interface ProposalRow {
 // shifts the day in negative-offset zones. Read it as text instead.
 const TOURNAMENT_COLUMNS = `
   id, code, name, to_char(date, 'YYYY-MM-DD') as date, status, config, seats_per_table,
-  current_level_index, level_started_at, paused_at, paused_ms, owner_token, host_player_id
+  current_level_index, level_started_at, paused_at, paused_ms, owner_token, host_player_id,
+  started_at
 `;
 
 function groupBy<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
@@ -220,6 +222,7 @@ function assemble(
       isRunning: reading.isRunning,
     },
     status: row.status,
+    startedAt: row.started_at?.toISOString() ?? null,
     knockoutOrder: knockouts.map((knockout) => knockout.player_id),
     seatAssignments: seatAssignments.length > 0 ? seatAssignments : undefined,
     code: row.code,

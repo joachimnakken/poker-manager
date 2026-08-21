@@ -19,6 +19,8 @@ export interface TournamentConfig {
   addonChips: number;
   lastRebuyLevel: number;
   blindStructure: BlindLevel[];
+  /** ISO instant the host wants to be done by. Unset means the pace nudge stays quiet. */
+  targetFinishAt?: string;
   payoutPercentages: number[];
   currency: string;
 }
@@ -112,6 +114,8 @@ export interface Tournament {
   players: Player[];
   /** Derived from `anchor` on every client — never the source of truth. */
   timer: Timer;
+  /** ISO instant the tournament started, null until it does. Cleared by a reset. */
+  startedAt: string | null;
   status: TournamentStatus;
   knockoutOrder: string[]; // player IDs in knockout order
   seatAssignments?: SeatAssignment[];
